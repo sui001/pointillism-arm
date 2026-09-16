@@ -457,7 +457,9 @@
 (function () {
   "use strict";
 
-  var COLS = 30, ROWS = 42, SHOW = 5, SECONDS_PER_DAB = 2.4, COPIES = 2, QUEUE_CAP = 50;
+  // 4.6 s per dab per copy is measured off the arm at 110 mm/s with dabs
+  // batched 15 to a sheet, not a guess: 363 dabs came out at 55 minutes.
+  var COLS = 30, ROWS = 42, SHOW = 5, SECONDS_PER_DAB = 4.6, COPIES = 2, QUEUE_CAP = 50;
   var API = "/api/jobs";
   var canvas = document.getElementById("dab-canvas");
   var ctx = canvas.getContext("2d");

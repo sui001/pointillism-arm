@@ -5,8 +5,12 @@ Pretends the gripper works. Each colour has its own brush standing in its own
 pot, so collecting the brush and loading it are the same place: it lifts the
 brush out of that colour's pot, dabs every dab of that colour onto both
 sheets, returns to the pot to reload as it goes, and stands the brush back in
-the pot before moving to the next colour. Each dab goes onto the display
-sheet then the keepsake sheet, so the two copies finish together.
+the pot before moving to the next colour.
+
+Dabs go on in batches: a batch on the display sheet, the same batch on the
+keepsake sheet, then the next batch. The sheets are far enough apart that
+crossing between them for every single dab spent over half the run travelling.
+The copies still finish together, to within one batch.
 
 There is no gripper yet, so nothing grips. The pauses are still spent, so the
 run takes about as long as the real thing would: KINOVA_GRIP_DWELL at each
@@ -27,7 +31,8 @@ and a bad place to begin Cartesian moves). It returns to where it started.
 
 KINOVA_JOB         job id from the pad queue, or 'latest'
 KINOVA_MAX_DABS    dabs to visit, evenly sampled from the job, default 12
-KINOVA_SPEED       m/s, default 0.08, capped at 0.15
+KINOVA_SPEED       m/s, default 0.11, capped at 0.15
+KINOVA_BATCH       dabs put on one sheet before swapping to the other, default 15
 KINOVA_HOVER       travel height in m above the base plane, default 0.20
 KINOVA_DIP         dip depth in m, default 0.04
 KINOVA_GRIP_DWELL  pretend gripper time in s per pick up or put down, default 1.2
@@ -60,7 +65,8 @@ USER = os.environ.get("KINOVA_USER")
 PASS = os.environ.get("KINOVA_PASS")
 JOB = os.environ.get("KINOVA_JOB", "latest").strip()
 MAX_DABS = int(os.environ.get("KINOVA_MAX_DABS", "12"))
-SPEED = float(os.environ.get("KINOVA_SPEED", "0.08"))
+SPEED = float(os.environ.get("KINOVA_SPEED", "0.11"))
+BATCH = int(os.environ.get("KINOVA_BATCH", "15"))
 HOVER_Z = float(os.environ.get("KINOVA_HOVER", "0.20"))
 DIP = float(os.environ.get("KINOVA_DIP", "0.04"))
 GRIP_DWELL = float(os.environ.get("KINOVA_GRIP_DWELL", "1.2"))
@@ -165,24 +171,41 @@ def plan(job, layout):
         moves.append((label + " down", point[0], point[1], HOVER_Z - DIP, dwell))
         moves.append((label + " lift", point[0], point[1], HOVER_Z, 0.0))
 
-    loaded, since = None, 0
-    for n, d in enumerate(picked, 1):
-        pig = d["pigment"]
-        if pig != loaded:
-            if loaded is not None:
-                touch("stand {} brush in its pot".format(loaded), pot(layout, loaded), GRIP_DWELL)
-            touch("lift {} brush from its pot".format(pig), pot(layout, pig), GRIP_DWELL)
-            loaded, since = pig, 0
-        elif since >= DIP_EVERY:
-            touch("reload " + pig, pot(layout, pig), LOAD_DWELL)
-            since = 0
-        for copy in job["copies"]:
-            sheet = layout["sheets"][copy["slot"]]
-            u = ((rows - 1) / 2.0 - d["row"]) * pitch
-            v = ((cols - 1) / 2.0 - d["col"]) * pitch
-            touch("dab {}/{} {} r{} c{}".format(n, len(picked), copy["slot"], d["row"], d["col"]),
-                  place(sheet, u, v), DAB_DWELL)
-            since += 1
+    def dab_point(sheet, d):
+        return place(sheet,
+                     ((rows - 1) / 2.0 - d["row"]) * pitch,
+                     ((cols - 1) / 2.0 - d["col"]) * pitch)
+
+    # The two sheets are far apart, so dabbing one then the other for every dab
+    # spends most of the run crossing between them. Do a batch on one sheet,
+    # then the same batch on the other, and the copies still finish together to
+    # within a batch.
+    groups = []
+    for d in picked:
+        if groups and groups[-1][0] == d["pigment"]:
+            groups[-1][1].append(d)
+        else:
+            groups.append((d["pigment"], [d]))
+
+    total = len(picked) * len(job["copies"])
+    loaded, since, placed = None, 0, 0
+    for pig, group in groups:
+        if loaded is not None:
+            touch("stand {} brush in its pot".format(loaded), pot(layout, loaded), GRIP_DWELL)
+        touch("lift {} brush from its pot".format(pig), pot(layout, pig), GRIP_DWELL)
+        loaded, since = pig, 0
+        for at in range(0, len(group), BATCH):
+            batch = group[at:at + BATCH]
+            for copy in job["copies"]:
+                sheet = layout["sheets"][copy["slot"]]
+                for d in batch:
+                    if since >= DIP_EVERY:
+                        touch("reload " + pig, pot(layout, pig), LOAD_DWELL)
+                        since = 0
+                    placed += 1
+                    touch("dab {}/{} {} r{} c{}".format(placed, total, copy["slot"], d["row"], d["col"]),
+                          dab_point(sheet, d), DAB_DWELL)
+                    since += 1
     if loaded is not None:
         touch("stand {} brush in its pot".format(loaded), pot(layout, loaded), GRIP_DWELL)
     return picked, moves

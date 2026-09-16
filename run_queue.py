@@ -127,6 +127,10 @@ def main():
         print("job #{}, {} dabs, {} left in the queue".format(
             job["id"], job["dab_count"], len(jobs)))
         print("=" * 68)
+        print("Put blank paper down, then left click the mouse to start.")
+        notify.beep()
+        notify.wait_for_click()
+        print("Off we go.\n")
 
         if not paint(job["id"]):
             print("\nGave up on job #{} after {} attempts. It stays in the queue.".format(
@@ -136,11 +140,7 @@ def main():
 
         mark_done(job["id"])
         painted += 1
-        print("\nJob #{} painted. Take both sheets off and put blank paper down.".format(job["id"]))
-        notify.beep()
-        print("Left click the mouse when the paper is ready.")
-        notify.wait_for_click()
-        print("Off we go.\n")
+        print("\nJob #{} painted. Take both sheets off.\n".format(job["id"]))
 
 
 if __name__ == "__main__":
