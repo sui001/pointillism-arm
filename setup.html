@@ -348,7 +348,32 @@
     });
   }
 
+  function drawPaintable() {
+    // The band every dab must sit inside: further out than INNER, nearer than
+    // WORK, and within the sweep. paint_sim checks exactly this and will refuse
+    // a whole job over one corner 3 mm short, so it is worth being able to see
+    // the band rather than finding its edge from a refusal.
+    var a0 = onRing(layout.sector.from, INNER);
+    var a1 = onRing(layout.sector.from, WORK);
+    var b0 = onRing(layout.sector.to, INNER);
+    var b1 = onRing(layout.sector.to, WORK);
+    var large = span() > 180 ? 1 : 0;
+    el("path", {
+      d: "M " + a1.sx + " " + a1.sy +
+         " A " + WORK + " " + WORK + " 0 " + large + " 0 " + b1.sx + " " + b1.sy +
+         " L " + b0.sx + " " + b0.sy +
+         " A " + INNER + " " + INNER + " 0 " + large + " 1 " + a0.sx + " " + a0.sy + " Z",
+      fill: "var(--accent)", "fill-opacity": 0.15, stroke: "none"
+    }, svg);
+    var mid = onRing(layout.sector.from + span() / 2, (INNER + WORK) / 2);
+    el("text", { x: mid.sx, y: mid.sy, fill: "var(--accent)", "text-anchor": "middle",
+                 "font-size": 36, "font-weight": 700, "fill-opacity": 0.75,
+                 "font-family": "IBM Plex Mono, monospace" }, svg)
+      .textContent = "paper goes here";
+  }
+
   function drawBackground() {
+    drawPaintable();
     el("circle", { cx: 0, cy: 0, r: REACH, fill: "none", stroke: "var(--line-strong)",
                    "stroke-width": 3, "stroke-dasharray": "12 10" }, svg);
     el("circle", { cx: 0, cy: 0, r: WORK, fill: "none", stroke: "var(--line)", "stroke-width": 2 }, svg);
@@ -357,6 +382,12 @@
     el("text", { x: 0, y: -REACH - 16, fill: "var(--ink-dim)", "text-anchor": "middle",
                  "font-size": 40, "font-family": "IBM Plex Mono, monospace" }, svg)
       .textContent = "reach 891 mm";
+    el("text", { x: 0, y: -WORK + 44, fill: "var(--ink-dim)", "text-anchor": "middle",
+                 "font-size": 30, "font-family": "IBM Plex Mono, monospace" }, svg)
+      .textContent = "furthest " + WORK + " mm";
+    el("text", { x: 0, y: -INNER - 16, fill: "var(--ink-dim)", "text-anchor": "middle",
+                 "font-size": 30, "font-family": "IBM Plex Mono, monospace" }, svg)
+      .textContent = "nearest " + INNER + " mm";
     el("rect", { x: -80, y: -80, width: 160, height: 160, rx: 10, fill: "var(--paper-panel-2)",
                  stroke: "var(--line-strong)", "stroke-width": 3 }, svg);
     el("rect", { x: -80, y: 55, width: 160, height: 25, fill: "var(--ink-dim)" }, svg);
@@ -391,6 +422,45 @@
     el("text", { x: pos.sx, y: pos.sy - h / 2 - 14, fill: "var(--ink)", "text-anchor": "middle",
                  "font-size": 32, "font-weight": 600,
                  "font-family": "IBM Plex Mono, monospace" }, g).textContent = def.label;
+
+    // Mark the corners the arm cannot use. A sheet 3 mm too close to the base
+    // costs the whole job, and until now the only way to find that out was to
+    // start one and read the refusal.
+    // paint_sim checks dab centres, not the paper edge. The grid is 30 x 42 at a
+    // 7 mm pitch, so the outermost dabs sit 3 to 5 mm inside the sheet. Checking
+    // the edge would send you moving paper that would actually have been fine.
+    var cw = def.kind === "sheet" ? (swapped ? 287 : 203) : w;
+    var ch = def.kind === "sheet" ? (swapped ? 203 : 287) : h;
+    outsideCorners(pos, cw, ch).forEach(function (c) {
+      el("circle", { cx: c.sx, cy: c.sy, r: 26, fill: "none", stroke: "var(--error)",
+                     "stroke-width": 6 }, g);
+      el("line", { x1: c.sx - 16, y1: c.sy - 16, x2: c.sx + 16, y2: c.sy + 16,
+                   stroke: "var(--error)", "stroke-width": 6 }, g);
+      el("line", { x1: c.sx + 16, y1: c.sy - 16, x2: c.sx - 16, y2: c.sy + 16,
+                   stroke: "var(--error)", "stroke-width": 6 }, g);
+    });
+  }
+
+  function bearingOf(sx, sy) {
+    // Inverse of onRing: screen back to the bearing the arm works in.
+    return Math.atan2(-sx, -sy) * 180 / Math.PI;
+  }
+
+  function inSweep(deg) {
+    var from = layout.sector.from;
+    var rel = ((deg - from) % 360 + 360) % 360;
+    return rel <= span();
+  }
+
+  function outsideCorners(pos, w, h) {
+    var bad = [];
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (s) {
+      var sx = pos.sx + s[0] * w / 2;
+      var sy = pos.sy + s[1] * h / 2;
+      var r = Math.sqrt(sx * sx + sy * sy);
+      if (r < INNER || r > WORK || !inSweep(bearingOf(sx, sy))) bad.push({ sx: sx, sy: sy });
+    });
+    return bad;
   }
 
   function drawZones() {
