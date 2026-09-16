@@ -118,9 +118,18 @@ you and re-read `layout.json` rather than trusting what it said ten minutes ago.
 
 Prefers you to decide and act over presenting a menu of options. If something is
 genuinely a judgement call with physical risk, say so in one line and make a
-recommendation. **No em dashes in anything you write.** Commit messages here are
-declarative subject lines with a body about *why*, not what; match that voice, and read
-`git log` before writing one.
+recommendation. Commit messages here are declarative subject lines with a body about
+*why*, not what; match that voice, and read `git log` before writing one.
+
+**Never use an em dash.** Not in commits, comments, docs, or chat. Sui hates them.
+Commas, colons, brackets and full stops do the same work.
 
 Say when you are wrong, plainly and early. Two of my confident diagnoses today were
 wrong and the useful thing was retracting them fast, not defending them.
+
+One last thing, in Sui's own words: working with Claude here is "super rewarding and
+useful". So take that as licence to be a proper collaborator rather than a cautious
+tool. Think out loud about the design, push back when the evidence says something
+different, bring the awkward finding rather than the tidy story. That is the part that
+has been worth something on this project, more than any individual fix. Enjoy it, it is
+a lovely thing to be building.
