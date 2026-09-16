@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
 """Beep when a painting is finished, and wait for a mouse click to start the next.
 
-The Pi 5 has no speaker of its own, so the beep is an active buzzer on a GPIO
-pin: buzzer positive to the pin, the other leg to any ground. With nothing
-wired up this still runs, it just makes no sound, so the queue never stalls
-waiting for hardware that is not there.
+The Pi 5 has no speaker of its own, so the beep is a piezo or buzzer on a GPIO
+pin. With nothing wired up this still runs, it just makes no sound, so the
+queue never stalls waiting for hardware that is not there.
+
+Wiring a three pin module (S, middle, -):
+
+    S       -> BCM 18, physical pin 12
+    middle  -> 3V3, physical pin 1
+    -       -> GND, physical pin 6
+
+It drives the pin with PWM rather than holding it high, because a passive
+piezo has no oscillator of its own and only clicks without a frequency to
+follow. An active buzzer gates its own oscillator and sounds fine either way,
+so PWM covers both and needs no knowledge of which one is plugged in.
+Piezos are loudest near resonance, usually 2 to 4 kHz: `notify.py sweep`
+plays a range so you can pick the one that carries in the room.
 
 The click is any plain USB mouse. It reads /dev/input/event* directly, so there
 is nothing to install, and the pi user is already in the input group. It does
@@ -24,6 +36,7 @@ import sys
 import time
 
 BUZZER_PIN = int(os.environ.get("KINOVA_BUZZER_PIN", "18"))
+BUZZER_HZ = float(os.environ.get("KINOVA_BUZZER_HZ", "2700"))
 
 # struct input_event: two longs of timestamp, then type, code, value
 EVENT_FORMAT = "llHHi"
@@ -33,30 +46,41 @@ BTN_LEFT = 0x110
 RESCAN_EVERY = 5.0
 
 
-def beep(times=2, on=0.18, gap=0.12):
+def beep(times=2, on=0.18, gap=0.12, hz=None):
     """Drive the buzzer pin. True means the pin was driven, NOT that a sound happened.
 
     Nothing here can tell whether a buzzer is actually wired to it, so do not
     let this claim otherwise. The only test is your ears.
     """
     try:
-        from gpiozero import Buzzer
+        from gpiozero import PWMOutputDevice
     except Exception:
         return False
     try:
-        buzzer = Buzzer(BUZZER_PIN)
+        buzzer = PWMOutputDevice(BUZZER_PIN, frequency=hz or BUZZER_HZ, initial_value=0)
     except Exception as e:
-        print("  no buzzer on BCM {}: {}".format(BUZZER_PIN, e))
+        print("  could not open BCM {}: {}".format(BUZZER_PIN, e))
         return False
     try:
         for i in range(times):
-            buzzer.on()
+            buzzer.value = 0.5      # square drive, the loudest a piezo will go
             time.sleep(on)
-            buzzer.off()
+            buzzer.value = 0
             if i + 1 < times:
                 time.sleep(gap)
     finally:
         buzzer.close()
+    return True
+
+
+def sweep(low=1000, high=4500, step=500, hold=0.6):
+    """Play a range of frequencies so you can hear which one carries. Piezos are
+    peaky, so the right one can be several times louder than its neighbours."""
+    for hz in range(low, high + 1, step):
+        print("  {} Hz".format(hz))
+        if not beep(times=1, on=hold, hz=hz):
+            return False
+        time.sleep(0.2)
     return True
 
 
@@ -107,10 +131,13 @@ if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "beep"
     if what == "beep":
         if beep():
-            print("drove BCM {} twice. Heard nothing? Then nothing is wired there yet."
-                  .format(BUZZER_PIN))
+            print("drove BCM {} twice at {:.0f} Hz. Heard nothing? Either nothing is "
+                  "wired there yet, or try `notify.py sweep`.".format(BUZZER_PIN, BUZZER_HZ))
         else:
             print("could not drive BCM {} at all.".format(BUZZER_PIN))
+    elif what == "sweep":
+        print("sweeping BCM {}, listen for the loudest".format(BUZZER_PIN))
+        sweep()
     elif what == "wait":
         print("waiting for a left click, Ctrl-C to give up")
         try:
