@@ -35,6 +35,7 @@ the blending.
 | `setup.html` | Bird's eye plan of the rig. Drag the sheets and pot block onto where they really are, set the sweep the arm may work in, add no-go boxes. Behind a password |
 | `display.html` | For a screen on the wall: the planned path, how much is done, and a live marker where the arm is |
 | `pointillism-pad.service` | systemd unit, so the Pi serves the pad from boot |
+| `pointillism-queue.service` | systemd unit for the runner, so the arm is ready to paint from boot |
 | `pad_server.py` | Serves both pages, holds the queue on disk, stores the layout. Standard library only |
 | `paint_sim.py` | Walks a queued job through every arm movement, with no paint and no contact |
 | `run_queue.py` | Paints the whole queue, oldest first, pausing between jobs for someone to change the paper |

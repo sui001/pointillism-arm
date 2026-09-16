@@ -134,10 +134,14 @@ def main():
         print("Off we go.\n")
 
         if not paint(job["id"]):
-            print("\nGave up on job #{} after {} attempts. It stays in the queue.".format(
+            # Stay put rather than exit. As a service, exiting just means a
+            # restart loop; waiting means a person can fix the arm and click.
+            print("\nJob #{} did not finish after {} attempts. It stays in the queue.".format(
                 job["id"], ATTEMPTS))
-            print("Check the arm, then start this script again.")
-            return
+            print("Check the arm, it may need parking at Home. Click to try again.")
+            notify.beep()
+            notify.wait_for_click()
+            continue
 
         mark_done(job["id"])
         painted += 1

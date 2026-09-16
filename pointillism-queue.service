@@ -1,0 +1,22 @@
+[Unit]
+Description=Pointillism queue runner: paints the queue, a click between jobs
+Documentation=https://github.com/sui001/pointillism-arm
+Requires=pointillism-pad.service
+After=network-online.target pointillism-pad.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/kinova
+# Armed from boot on purpose. It beeps and waits for a mouse click before every
+# job, so nothing moves until a person at the machine says so, having seen that
+# there is paper down.
+Environment=KINOVA_CONFIRM=yes
+# Must be the python that can import kortex_api and gpiozero, not the system one.
+ExecStart=/home/pi/kinova-py310/bin/python /home/pi/kinova/run_queue.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
