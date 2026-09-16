@@ -384,6 +384,28 @@ session.CreateSession(info)
 base = BaseClient(router)
 cyclic = BaseCyclicClient(router)
 
+# Ask the arm what it will allow rather than trusting the cap above. The arm
+# clamps a Cartesian speed to its own soft limit silently, so asking for more
+# than it permits gets you a plan header quoting a speed that never happens.
+# Better to be told than to measure a run and wonder why it does not add up.
+try:
+    from kortex_api.autogen.client_stubs.ControlConfigClientRpc import ControlConfigClient
+    from kortex_api.autogen.messages import ControlConfig_pb2
+
+    _mode = ControlConfig_pb2.ControlModeInformation()
+    _mode.control_mode = ControlConfig_pb2.CARTESIAN_TRAJECTORY
+    _allowed = ControlConfigClient(router).GetKinematicSoftLimits(_mode).twist_linear
+    if _allowed and max(SPEED, TRAVEL_SPEED) > _allowed + 1e-6:
+        sys.exit(
+            "Refusing: asking for {:.3f} m/s but the arm's CARTESIAN_TRAJECTORY\n"
+            "twist_linear soft limit is {:.3f}. It would clamp silently and the\n"
+            "plan below would be a lie. Lower the speed, or raise the limit."
+            .format(max(SPEED, TRAVEL_SPEED), _allowed))
+except SystemExit:
+    raise
+except Exception as _e:
+    print("NOTE: could not read the arm's speed limit ({}). Carrying on.".format(_e))
+
 done = threading.Event()
 result = {}
 handle = None
