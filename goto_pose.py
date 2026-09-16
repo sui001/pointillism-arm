@@ -122,10 +122,22 @@ def why(notification):
 
 
 try:
+    # Any script closing its session leaves the arm reporting MANUALLY_CONTROLLED
+    # for a few seconds, and this is the script you reach for straight after one
+    # has stopped. Refusing on that is refusing on nothing. Wait for it to clear,
+    # but never take the arm off a person who is actually driving it.
+    deadline = time.time() + float(os.environ.get("KINOVA_WAIT_READY", "30"))
     state = base.GetArmState().active_state
-    if state != Base_pb2.ARMSTATE_SERVOING_READY:
-        raise SystemExit("arm is {}, not SERVOING_READY. Aborting.".format(
+    while state != Base_pb2.ARMSTATE_SERVOING_READY and time.time() < deadline:
+        print("  waiting for the arm to be free: {}".format(
             Base_pb2.ArmState.Name(state)))
+        time.sleep(2)
+        state = base.GetArmState().active_state
+    if state != Base_pb2.ARMSTATE_SERVOING_READY:
+        raise SystemExit(
+            "arm is {}, not SERVOING_READY. Something is driving it: a painting,\n"
+            "the Kortex web app, a gamepad, or admittance mode from the wrist "
+            "button.".format(Base_pb2.ArmState.Name(state)))
 
     fb = cyclic.RefreshFeedback()
     if fb.base.fault_bank_a or fb.base.fault_bank_b:

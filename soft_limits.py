@@ -40,6 +40,7 @@ KINOVA_JOINT_SPEED  deg/s for all six joints under CARTESIAN_TRAJECTORY. Leave i
 """
 import os
 import sys
+import time
 
 from kortex_api.TCPTransport import TCPTransport
 from kortex_api.RouterClient import RouterClient
@@ -135,12 +136,21 @@ try:
         print("\nDRY RUN. Nothing changed. Re-run with KINOVA_CONFIRM=yes.")
         raise SystemExit(0)
 
-    # Never rewrite limits out from under a painting.
+    # Never rewrite limits out from under a painting. But any script closing its
+    # session leaves the arm reporting MANUALLY_CONTROLLED for a few seconds, so
+    # waiting is right where failing is not. jog_joint.py learned this first.
+    deadline = time.time() + float(os.environ.get("KINOVA_WAIT_READY", "30"))
     state = base.GetArmState().active_state
+    while state != Base_pb2.ARMSTATE_SERVOING_READY and time.time() < deadline:
+        print("  waiting for the arm to be free: {}".format(
+            Base_pb2.ArmState.Name(state)))
+        time.sleep(2)
+        state = base.GetArmState().active_state
     if state != Base_pb2.ARMSTATE_SERVOING_READY:
         raise SystemExit(
-            "\nRefusing: arm is {}, not SERVOING_READY. Something is driving it,\n"
-            "most likely a painting in progress. Let it finish, then run this."
+            "\nRefusing: arm is {}, not SERVOING_READY. Something is driving it:\n"
+            "a painting in progress, the Kortex web app, a gamepad, or admittance\n"
+            "mode from the wrist button."
             .format(Base_pb2.ArmState.Name(state)))
 
     limits = ControlConfig_pb2.JointSpeedSoftLimits()
