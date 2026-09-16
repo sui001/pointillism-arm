@@ -39,6 +39,8 @@ the blending.
 | `pad_server.py` | Serves both pages, holds the queue on disk, stores the layout. Standard library only |
 | `paint_sim.py` | Walks a queued job through every arm movement, with no paint and no contact |
 | `run_queue.py` | Paints the whole queue, oldest first, pausing between jobs for someone to change the paper |
+| `goto_pose.py` | Parks the arm at a factory pose, Home nearly always. What the queue tells you to run when it refuses to start |
+| `jog_joint.py` | Moves one joint at a time, for recovering from a pose that a whole-pose move should not be trusted with |
 | `notify.py` | Beeps a GPIO buzzer when a painting is done, and waits for a mouse click to start the next |
 | `kenv.py` | Reads arm credentials from `/etc/kinova.env` so they stay off the command line |
 
@@ -64,6 +66,21 @@ The arm is a real machine on a desk, so the sim refuses rather than guesses:
   swings round its own column instead of past it.
 - It will not move unless the arm is idle and parked at Home first.
 - Without `KINOVA_CONFIRM=yes` it prints the plan and moves nothing.
+
+When it does refuse, it is nearly always because the arm is not at Home. `goto_pose.py`
+parks it:
+
+```sh
+KINOVA_TARGET=Home KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/goto_pose.py
+```
+
+That interpolates every joint at once, and the swept path is not predictable from the
+two endpoints. When the arm is standing somewhere that makes it a bad bet, `jog_joint.py`
+moves one joint at a time instead, which is predictable:
+
+```sh
+KINOVA_JOINT=3 KINOVA_ANGLE=0 KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/jog_joint.py
+```
 
 ## Running it
 
