@@ -31,6 +31,8 @@ KINOVA_SPEED       m/s, default 0.08, capped at 0.15
 KINOVA_HOVER       travel height in m above the base plane, default 0.20
 KINOVA_DIP         dip depth in m, default 0.04
 KINOVA_GRIP_DWELL  pretend gripper time in s per pick up or put down, default 1.2
+KINOVA_DABS_PER_DIP  dabs put down before going back for more paint, default 10.
+                   A guess until there is a real brush to watch run dry.
 KINOVA_PAD_URL     default http://127.0.0.1:8010
 """
 import base64
@@ -62,13 +64,13 @@ SPEED = float(os.environ.get("KINOVA_SPEED", "0.08"))
 HOVER_Z = float(os.environ.get("KINOVA_HOVER", "0.20"))
 DIP = float(os.environ.get("KINOVA_DIP", "0.04"))
 GRIP_DWELL = float(os.environ.get("KINOVA_GRIP_DWELL", "1.2"))
+DIP_EVERY = int(os.environ.get("KINOVA_DABS_PER_DIP", "10"))
 ARMED = os.environ.get("KINOVA_CONFIRM") == "yes"
 PAD = os.environ.get("KINOVA_PAD_URL", "http://127.0.0.1:8010")
 
 PIGMENT_ORDER = ("carbon", "green", "ochre", "ultramarine", "venetian")
 SLOT_PITCH = 0.06           # pot spacing, matches the setup page
 DOWN = (180.0, 0.0, 90.0)   # tool pointing at the desk
-DIP_EVERY = 8               # touches per load of paint
 LOAD_DWELL = 0.6            # pause while the brush takes up paint
 DAB_DWELL = 0.25            # pause while the brush touches the paper
 MIN_Z = 0.12                # nothing goes below this, dips included
