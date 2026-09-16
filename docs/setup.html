@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arm Setup Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #eef0ea;
+    --paper-panel: #e3e6dc;
+    --paper-panel-2: #d9ddd0;
+    --ink: #1e2420;
+    --ink-dim: #333a31;
+    --accent: #1b6e73;
+    --accent-contrast: #eaf6f5;
+    --error: #b3261e;
+    --nogo: #b3261e;
+    --line: rgba(30, 36, 32, 0.18);
+    --line-strong: rgba(30, 36, 32, 0.40);
+    --field: #f7f8f3;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #171a17;
+      --paper-panel: #20241f;
+      --paper-panel-2: #2a3029;
+      --ink: #f2f4ec;
+      --ink-dim: #d3dbd1;
+      --accent: #4fd1d9;
+      --accent-contrast: #0b2c2e;
+      --error: #ff8a80;
+      --nogo: #ff8a80;
+      --line: rgba(242, 244, 236, 0.18);
+      --line-strong: rgba(242, 244, 236, 0.42);
+      --field: #11140f;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #171a17;
+    --paper-panel: #20241f;
+    --paper-panel-2: #2a3029;
+    --ink: #f2f4ec;
+    --ink-dim: #d3dbd1;
+    --accent: #4fd1d9;
+    --accent-contrast: #0b2c2e;
+    --error: #ff8a80;
+    --nogo: #ff8a80;
+    --line: rgba(242, 244, 236, 0.18);
+    --line-strong: rgba(242, 244, 236, 0.42);
+    --field: #11140f;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Archivo", system-ui, sans-serif;
+    padding-inline: 20px;
+    padding-block: 28px 60px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .sheet { width: 100%; max-width: 1040px; display: flex; flex-direction: column; gap: 20px; }
+
+  header { display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); padding-bottom: 18px; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  h1 { font-size: clamp(1.8rem, 1.4rem + 1.6vw, 2.6rem); font-weight: 900; margin: 0; letter-spacing: -0.01em; }
+
+  .dek { max-width: 64ch; color: var(--ink-dim); font-size: 1rem; line-height: 1.55; margin: 0; }
+
+  a { color: var(--accent); }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--paper-panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .panel h2 {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin: 0;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  #plan { width: 100%; height: auto; touch-action: none; display: block; }
+
+  .legend {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.75rem;
+    color: var(--ink-dim);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .item-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+  }
+
+  .item-row:last-of-type { border-bottom: 0; padding-bottom: 0; }
+
+  .item-name { font-size: 0.85rem; font-weight: 700; }
+
+  .item-pos {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.75rem;
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  button {
+    font-family: "Archivo", sans-serif;
+    font-weight: 700;
+    font-size: 0.82rem;
+    border-radius: 4px;
+    padding: 8px 12px;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  button:hover { background: var(--paper-panel-2); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+  button.small { padding: 5px 9px; font-size: 0.75rem; }
+
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .zone-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: center; }
+
+  label.field {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    color: var(--ink-dim);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  input[type="number"] {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    padding: 5px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--line-strong);
+    background: var(--field);
+    color: var(--ink);
+    width: 100%;
+  }
+
+  #status {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    min-height: 1.2em;
+    color: var(--accent);
+    margin: 0;
+  }
+
+  #status.error { color: var(--error); }
+
+  .note { font-size: 0.85rem; line-height: 1.5; color: var(--ink-dim); margin: 0; }
+
+  #flight-json {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    max-height: 260px;
+    overflow: auto;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 12px;
+    white-space: pre;
+    margin: 0;
+    color: var(--ink);
+  }
+
+  .drag { cursor: grab; }
+  .drag:active { cursor: grabbing; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <span class="eyebrow">Cybernetic Garden · arm composer prototype</span>
+    <h1>Arm Setup Plan</h1>
+    <p class="dek">
+      Bird's eye view of the arm and its reach. Drag the two sheets and the pot block
+      to where they really are on the desk. Drag the two handles on the ring to set
+      the sweep the arm is allowed to work in, and add no-go boxes for anything
+      inside it. Saved here and read by the painting scripts, so the rig can be set
+      up anywhere. Back to the <a href="pad.html">pad</a>.
+    </p>
+  </header>
+
+  <main>
+    <div class="panel">
+      <svg id="plan" viewBox="-950 -950 1900 1900" role="img"
+           aria-label="Top down plan of the arm workspace with draggable items"></svg>
+      <div class="legend">
+        <span>front of arm is up · base panel (back) is down · pots to the right</span>
+        <span>drag to place · 5 mm and 5 deg steps</span>
+      </div>
+    </div>
+
+    <div class="sidebar panel">
+      <h2>Placed items</h2>
+      <div id="items"></div>
+
+      <h2>Working sweep</h2>
+      <div class="pair">
+        <label class="field">from deg
+          <input type="number" id="sector-from" step="5" min="-360" max="360">
+        </label>
+        <label class="field">to deg
+          <input type="number" id="sector-to" step="5" min="-360" max="360">
+        </label>
+      </div>
+      <p class="note" id="sector-note"></p>
+
+      <h2>No-go boxes</h2>
+      <div id="zones"></div>
+      <button type="button" id="add-zone">Add no-go box</button>
+
+      <h2>Save</h2>
+      <button type="button" class="primary" id="save">Save layout</button>
+      <button type="button" id="reset">Reset to defaults</button>
+      <p id="status" role="status"></p>
+      <p class="note">Positions are millimetres from the centre of the arm base, angles
+        are degrees with 0 straight out the front and positive to the arm's left. The
+        painting scripts refuse to run if any move, or any straight line between moves,
+        leaves the sweep or crosses a box.</p>
+    </div>
+  </main>
+
+  <section class="panel">
+    <h2>Last flight plan</h2>
+    <p class="note">What the arm gets handed for the most recent submission. Studio
+      detail, which is why it lives here and not on the pad.</p>
+    <pre id="flight-json">Loading...</pre>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var REACH = 891, INNER = 250, WORK = 800, HANDLE_R = 700, SNAP = 5, SNAP_DEG = 5;
+  var PIGMENTS = ["#14110f", "#f7f5ee", "#c98a2e", "#2b4c8c", "#a23b2e"];
+  var SLOT_PITCH = 60;
+  var SVGNS = "http://www.w3.org/2000/svg";
+
+  // sizes in mm: sy across the arm's left-right, sx front-back, at rot 0
+  var ITEMS = [
+    { key: "display", label: "Display sheet", sy: 210, sx: 297, kind: "sheet" },
+    { key: "keepsake", label: "Keepsake sheet", sy: 210, sx: 297, kind: "sheet" },
+    { key: "pots", label: "Paint pots", sy: 310, sx: 80, kind: "slots" }
+  ];
+
+  var svg = document.getElementById("plan");
+  var layout = null;
+  var defaults = null;
+  var selectedZone = -1;
+  var DEMO = false;          // set when there is no pad_server behind this page
+  var DEMO_LAYOUT = {
+    sheets: { display: { x: 0.5, y: 0.21, rot: 0 }, keepsake: { x: 0.5, y: -0.21, rot: 0 } },
+    pots: { x: 0.34, y: -0.40, rot: 90 },
+    sector: { from: -150, to: 75 },
+    nogo: []
+  };
+
+  function el(name, attrs, parent) {
+    var node = document.createElementNS(SVGNS, name);
+    Object.keys(attrs).forEach(function (k) { node.setAttribute(k, attrs[k]); });
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+
+  function item(key) {
+    return key === "display" || key === "keepsake" ? layout.sheets[key] : layout[key];
+  }
+
+  // base frame (metres) to screen (mm): front (+x) is up, arm's left (+y) is left
+  function toScreen(x, y) { return { sx: -y * 1000, sy: -x * 1000 }; }
+  function toBase(sx, sy) { return { x: -sy / 1000, y: -sx / 1000 }; }
+  function snap(v) { return Math.round(v / (SNAP / 1000)) * (SNAP / 1000); }
+  function onRing(deg, r) {
+    var t = deg * Math.PI / 180;
+    return { sx: -r * Math.sin(t), sy: -r * Math.cos(t) };
+  }
+  function span() { return ((layout.sector.to - layout.sector.from) % 360 + 360) % 360 || 360; }
+
+  function drawSector() {
+    var a = onRing(layout.sector.from, REACH);
+    var b = onRing(layout.sector.to, REACH);
+    var large = span() > 180 ? 1 : 0;
+    el("path", {
+      d: "M 0 0 L " + a.sx + " " + a.sy + " A " + REACH + " " + REACH + " 0 " + large + " 0 " +
+         b.sx + " " + b.sy + " Z",
+      fill: "var(--accent)", "fill-opacity": 0.10, stroke: "var(--accent)",
+      "stroke-width": 3, "stroke-opacity": 0.5
+    }, svg);
+    [["from", layout.sector.from], ["to", layout.sector.to]].forEach(function (pair) {
+      var p = onRing(pair[1], HANDLE_R);
+      var g = el("g", { class: "drag", "data-handle": pair[0], tabindex: 0,
+                        role: "button", "aria-label": "Sweep " + pair[0] + " edge" }, svg);
+      el("line", { x1: 0, y1: 0, x2: p.sx, y2: p.sy, stroke: "var(--accent)",
+                   "stroke-width": 4, "stroke-dasharray": "10 8" }, g);
+      el("circle", { cx: p.sx, cy: p.sy, r: 34, fill: "var(--accent)" }, g);
+      el("text", { x: p.sx, y: p.sy + 11, fill: "var(--accent-contrast)", "text-anchor": "middle",
+                   "font-size": 28, "font-weight": 700,
+                   "font-family": "IBM Plex Mono, monospace" }, g)
+        .textContent = Math.round(pair[1]);
+    });
+  }
+
+  function drawBackground() {
+    el("circle", { cx: 0, cy: 0, r: REACH, fill: "none", stroke: "var(--line-strong)",
+                   "stroke-width": 3, "stroke-dasharray": "12 10" }, svg);
+    el("circle", { cx: 0, cy: 0, r: WORK, fill: "none", stroke: "var(--line)", "stroke-width": 2 }, svg);
+    el("circle", { cx: 0, cy: 0, r: INNER, fill: "none", stroke: "var(--line)",
+                   "stroke-width": 2, "stroke-dasharray": "6 8" }, svg);
+    el("text", { x: 0, y: -REACH - 16, fill: "var(--ink-dim)", "text-anchor": "middle",
+                 "font-size": 40, "font-family": "IBM Plex Mono, monospace" }, svg)
+      .textContent = "reach 891 mm";
+    el("rect", { x: -80, y: -80, width: 160, height: 160, rx: 10, fill: "var(--paper-panel-2)",
+                 stroke: "var(--line-strong)", "stroke-width": 3 }, svg);
+    el("rect", { x: -80, y: 55, width: 160, height: 25, fill: "var(--ink-dim)" }, svg);
+    el("text", { x: 0, y: 130, fill: "var(--ink-dim)", "text-anchor": "middle",
+                 "font-size": 34, "font-family": "IBM Plex Mono, monospace" }, svg)
+      .textContent = "back";
+    el("text", { x: 0, y: -840, fill: "var(--ink-dim)", "text-anchor": "middle",
+                 "font-size": 34, "font-family": "IBM Plex Mono, monospace" }, svg)
+      .textContent = "front";
+    el("text", { x: 860, y: 10, fill: "var(--ink-dim)", "text-anchor": "end",
+                 "font-size": 34, "font-family": "IBM Plex Mono, monospace" }, svg)
+      .textContent = "right";
+  }
+
+  function drawItem(def) {
+    var place = item(def.key);
+    var pos = toScreen(place.x, place.y);
+    var swapped = place.rot === 90;
+    var w = swapped ? def.sx : def.sy;
+    var h = swapped ? def.sy : def.sx;
+    var g = el("g", { class: "drag", "data-key": def.key, tabindex: 0,
+                      role: "button", "aria-label": def.label }, svg);
+    el("rect", { x: pos.sx - w / 2, y: pos.sy - h / 2, width: w, height: h, rx: 4,
+                 fill: "var(--paper)", stroke: "var(--accent)", "stroke-width": 4 }, g);
+    if (def.kind === "slots") {
+      for (var i = 0; i < 5; i++) {
+        var off = (i - 2) * SLOT_PITCH;
+        el("circle", { cx: swapped ? pos.sx : pos.sx + off, cy: swapped ? pos.sy + off : pos.sy,
+                       r: 22, fill: PIGMENTS[i], stroke: "var(--line-strong)", "stroke-width": 2 }, g);
+      }
+    }
+    el("text", { x: pos.sx, y: pos.sy - h / 2 - 14, fill: "var(--ink)", "text-anchor": "middle",
+                 "font-size": 32, "font-weight": 600,
+                 "font-family": "IBM Plex Mono, monospace" }, g).textContent = def.label;
+  }
+
+  function drawZones() {
+    layout.nogo.forEach(function (z, i) {
+      var pos = toScreen(z.x, z.y);
+      var g = el("g", { class: "drag", "data-zone": i, tabindex: 0,
+                        role: "button", "aria-label": "No-go box " + (i + 1) }, svg);
+      el("rect", {
+        x: pos.sx - z.sy * 500, y: pos.sy - z.sx * 500,
+        width: z.sy * 1000, height: z.sx * 1000,
+        fill: "var(--nogo)", "fill-opacity": i === selectedZone ? 0.28 : 0.16,
+        stroke: "var(--nogo)", "stroke-width": i === selectedZone ? 6 : 3,
+        "stroke-dasharray": "14 10"
+      }, g);
+      el("text", { x: pos.sx, y: pos.sy + 12, fill: "var(--nogo)", "text-anchor": "middle",
+                   "font-size": 32, "font-weight": 600,
+                   "font-family": "IBM Plex Mono, monospace" }, g).textContent = "no-go " + (i + 1);
+    });
+  }
+
+  function render() {
+    svg.textContent = "";
+    drawBackground();
+    drawSector();
+    ITEMS.forEach(drawItem);
+    drawZones();
+    renderSidebar();
+  }
+
+  function renderSidebar() {
+    var box = document.getElementById("items");
+    box.textContent = "";
+    ITEMS.forEach(function (def) {
+      var place = item(def.key);
+      var row = document.createElement("div");
+      row.className = "item-row";
+      var left = document.createElement("div");
+      var name = document.createElement("div");
+      name.className = "item-name";
+      name.textContent = def.label;
+      var pos = document.createElement("div");
+      pos.className = "item-pos";
+      pos.textContent = "x " + Math.round(place.x * 1000) + " · y " + Math.round(place.y * 1000) +
+                        " mm · " + place.rot + " deg";
+      left.appendChild(name);
+      left.appendChild(pos);
+      var rotate = document.createElement("button");
+      rotate.type = "button";
+      rotate.className = "small";
+      rotate.textContent = "Rotate";
+      rotate.addEventListener("click", function () {
+        place.rot = place.rot === 0 ? 90 : 0;
+        render();
+      });
+      row.appendChild(left);
+      row.appendChild(rotate);
+      box.appendChild(row);
+    });
+
+    document.getElementById("sector-from").value = Math.round(layout.sector.from);
+    document.getElementById("sector-to").value = Math.round(layout.sector.to);
+    document.getElementById("sector-note").textContent =
+      "The arm may work through " + Math.round(span()) + " deg of sweep. Everything outside is refused.";
+
+    var zbox = document.getElementById("zones");
+    zbox.textContent = "";
+    if (!layout.nogo.length) {
+      var p = document.createElement("p");
+      p.className = "note";
+      p.textContent = "None. Only the sweep limits the arm.";
+      zbox.appendChild(p);
+    }
+    layout.nogo.forEach(function (z, i) {
+      var row = document.createElement("div");
+      row.className = "zone-row";
+      [["sx", "depth mm"], ["sy", "width mm"]].forEach(function (pair) {
+        var label = document.createElement("label");
+        label.className = "field";
+        label.textContent = pair[1];
+        var input = document.createElement("input");
+        input.type = "number";
+        input.id = "zone-" + i + "-" + pair[0];
+        input.min = "20";
+        input.max = "1600";
+        input.step = "10";
+        input.value = Math.round(z[pair[0]] * 1000);
+        input.addEventListener("change", function () {
+          z[pair[0]] = Math.min(1600, Math.max(20, Number(input.value) || 200)) / 1000;
+          selectedZone = i;
+          render();
+        });
+        label.appendChild(input);
+        row.appendChild(label);
+      });
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "small";
+      del.textContent = "Delete";
+      del.addEventListener("click", function () {
+        layout.nogo.splice(i, 1);
+        selectedZone = -1;
+        render();
+      });
+      row.appendChild(del);
+      zbox.appendChild(row);
+    });
+  }
+
+  var drag = null;
+
+  function svgPoint(evt) {
+    var pt = svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+
+  svg.addEventListener("pointerdown", function (evt) {
+    var g = evt.target.closest("g.drag");
+    if (!g) return;
+    var p = svgPoint(evt);
+    if (g.dataset.handle) {
+      drag = { handle: g.dataset.handle };
+    } else {
+      var target = g.dataset.zone !== undefined ? layout.nogo[Number(g.dataset.zone)] : item(g.dataset.key);
+      var pos = toScreen(target.x, target.y);
+      drag = { target: target, dx: p.x - pos.sx, dy: p.y - pos.sy };
+      if (g.dataset.zone !== undefined) { selectedZone = Number(g.dataset.zone); }
+    }
+    svg.setPointerCapture(evt.pointerId);
+    render();
+    evt.preventDefault();
+  });
+
+  svg.addEventListener("pointermove", function (evt) {
+    if (!drag) return;
+    var p = svgPoint(evt);
+    if (drag.handle) {
+      var base = toBase(p.x, p.y);
+      var deg = Math.atan2(base.y, base.x) * 180 / Math.PI;
+      layout.sector[drag.handle] = Math.round(deg / SNAP_DEG) * SNAP_DEG;
+    } else {
+      var b = toBase(p.x - drag.dx, p.y - drag.dy);
+      drag.target.x = Math.max(-1, Math.min(1, snap(b.x)));
+      drag.target.y = Math.max(-1, Math.min(1, snap(b.y)));
+    }
+    render();
+  });
+
+  ["pointerup", "pointercancel"].forEach(function (name) {
+    svg.addEventListener(name, function () { drag = null; });
+  });
+
+  ["from", "to"].forEach(function (key) {
+    document.getElementById("sector-" + key).addEventListener("change", function (evt) {
+      var v = Number(evt.target.value);
+      if (!isFinite(v)) return;
+      layout.sector[key] = Math.max(-360, Math.min(360, v));
+      render();
+    });
+  });
+
+  var statusEl = document.getElementById("status");
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg;
+    statusEl.classList.toggle("error", !!isError);
+  }
+
+  document.getElementById("add-zone").addEventListener("click", function () {
+    if (layout.nogo.length >= 12) { setStatus("Twelve boxes is the limit.", true); return; }
+    layout.nogo.push({ x: 0.45, y: 0.0, sx: 0.2, sy: 0.2 });
+    selectedZone = layout.nogo.length - 1;
+    render();
+    setStatus("Box added. Drag it into place, then save.");
+  });
+
+  document.getElementById("reset").addEventListener("click", function () {
+    layout = JSON.parse(JSON.stringify(defaults));
+    selectedZone = -1;
+    render();
+    setStatus("Back to the loaded layout. Not saved yet.");
+  });
+
+  document.getElementById("save").addEventListener("click", function () {
+    if (DEMO) {
+      setStatus("Demo only: there is no arm behind this page, so nothing was saved.", true);
+      return;
+    }
+    fetch("/api/layout", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(layout)
+    })
+      .then(function (r) {
+        return r.json().then(function (b) {
+          if (!r.ok) throw new Error(b.error || "HTTP " + r.status);
+          return b;
+        });
+      })
+      .then(function () { setStatus("Saved. The painting scripts read this."); })
+      .catch(function (e) { setStatus("Could not save: " + e.message, true); });
+  });
+
+  function loadFlightPlan() {
+    var box = document.getElementById("flight-json");
+    fetch("/api/jobs", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (d) {
+        if (!d.jobs.length) { box.textContent = "The queue is empty."; return null; }
+        return fetch("/api/jobs/" + d.jobs[d.jobs.length - 1].id)
+          .then(function (r) { return r.json(); })
+          .then(function (job) {
+            box.textContent = JSON.stringify({
+              id: job.id,
+              copies: job.copies.map(function (c) { return c.slot; }),
+              grid: job.grid,
+              dab_count: job.dab_count,
+              dabs: job.dabs.slice(0, 40)
+            }, null, 2) + (job.dab_count > 40 ? "\n  ... " + (job.dab_count - 40) + " more" : "");
+          });
+      })
+      .catch(function () { box.textContent = "No arm behind this page."; });
+  }
+
+  loadFlightPlan();
+
+  fetch("/api/layout", { cache: "no-store" })
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function (data) {
+      layout = data;
+      defaults = JSON.parse(JSON.stringify(data));
+      render();
+      setStatus("Loaded the saved layout.");
+    })
+    .catch(function () {
+      DEMO = true;
+      layout = JSON.parse(JSON.stringify(DEMO_LAYOUT));
+      defaults = JSON.parse(JSON.stringify(DEMO_LAYOUT));
+      render();
+      setStatus("Demo mode: no arm behind this page. Drag things about, but saving is off.");
+    });
+})();
+</script>
+</body>
+</html>

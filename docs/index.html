@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pointillism Pad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #eef0ea;
+    --paper-panel: #e3e6dc;
+    --paper-panel-2: #d9ddd0;
+    --thumb-paper: #f4f2ea;
+    --ink: #1e2420;
+    --ink-dim: #333a31;
+    --accent: #1b6e73;
+    --accent-contrast: #eaf6f5;
+    --error: #b3261e;
+    --line: rgba(30, 36, 32, 0.18);
+    --line-strong: rgba(30, 36, 32, 0.40);
+    --shadow: rgba(20, 24, 21, 0.18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #171a17;
+      --paper-panel: #20241f;
+      --paper-panel-2: #2a3029;
+      --ink: #f2f4ec;
+      --ink-dim: #d3dbd1;
+      --accent: #4fd1d9;
+      --accent-contrast: #0b2c2e;
+      --error: #ff8a80;
+      --line: rgba(242, 244, 236, 0.18);
+      --line-strong: rgba(242, 244, 236, 0.42);
+      --shadow: rgba(0, 0, 0, 0.55);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #171a17;
+    --paper-panel: #20241f;
+    --paper-panel-2: #2a3029;
+    --ink: #f2f4ec;
+    --ink-dim: #d3dbd1;
+    --accent: #4fd1d9;
+    --accent-contrast: #0b2c2e;
+    --error: #ff8a80;
+    --line: rgba(242, 244, 236, 0.18);
+    --line-strong: rgba(242, 244, 236, 0.42);
+    --shadow: rgba(0, 0, 0, 0.55);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Archivo", system-ui, sans-serif;
+    padding-inline: 20px;
+    padding-block: 28px 60px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .sheet {
+    width: 100%;
+    max-width: 980px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 18px;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  h1 {
+    font-size: clamp(1.9rem, 1.5rem + 1.8vw, 2.9rem);
+    font-weight: 900;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  .dek {
+    max-width: 62ch;
+    color: var(--ink-dim);
+    font-size: 1rem;
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  .panel {
+    background: var(--paper-panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .panel h2 {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .queue-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  #queue-count {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .queue {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    min-height: 116px;
+  }
+
+  figure.qthumb {
+    margin: 0;
+    width: 68px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  figure.qthumb img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 30 / 42;
+    background: var(--thumb-paper);
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+  }
+
+  figure.qthumb .blank {
+    width: 100%;
+    aspect-ratio: 30 / 42;
+    background: var(--thumb-paper);
+    border: 1px dashed var(--line-strong);
+    border-radius: 2px;
+  }
+
+  figure.qthumb.next img,
+  figure.qthumb.next .blank { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  figure.qthumb figcaption {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    color: var(--ink);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  figure.qthumb.next figcaption { color: var(--accent); font-weight: 600; }
+
+  .qmore {
+    width: 68px;
+    aspect-ratio: 30 / 42;
+    border: 1.5px dashed var(--line-strong);
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 1.25rem;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 720px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .canvas-frame {
+    background: var(--paper);
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    box-shadow: inset 0 1px 3px var(--shadow);
+    padding: 4px;
+  }
+
+  #dab-canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 30 / 42;
+    touch-action: none;
+    cursor: crosshair;
+  }
+
+  .canvas-caption {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .palette {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .pigment {
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 2px solid var(--line-strong);
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  .pigment[aria-checked="true"] {
+    box-shadow: 0 0 0 3px var(--paper-panel), 0 0 0 5px var(--accent);
+  }
+
+  .pigment:hover { transform: scale(1.06); }
+  .pigment:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  .pigment.eraser {
+    background:
+      linear-gradient(45deg, transparent 46%, var(--line-strong) 46%, var(--line-strong) 54%, transparent 54%),
+      var(--paper);
+  }
+
+  .readout {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .readout-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .readout-row span:first-child { color: var(--ink-dim); }
+
+  button.action {
+    font-family: "Archivo", sans-serif;
+    font-weight: 700;
+    font-size: 0.88rem;
+    border-radius: 4px;
+    padding: 10px 14px;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+
+  button.action:hover { background: var(--paper-panel-2); }
+  button.action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.action:disabled { cursor: progress; opacity: 0.7; }
+
+  button.primary {
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border-color: var(--accent);
+  }
+
+  button.primary:hover { background: var(--accent); filter: brightness(1.06); }
+
+  #submit-status {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    min-height: 1.2em;
+    color: var(--accent);
+    margin: 0;
+  }
+
+  #submit-status.error { color: var(--error); }
+
+  .note {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--ink-dim);
+    margin: 0;
+  }
+
+  .note strong { color: var(--ink); }
+
+  .qtime {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .gear {
+    display: flex;
+    justify-content: center;
+    margin: 28px 0 0;
+  }
+
+  .gear a {
+    color: var(--line-strong);
+    display: inline-flex;
+    padding: 6px;
+    border-radius: 50%;
+  }
+
+  .gear a:hover { color: var(--accent); }
+  .gear a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pigment { transition: none; }
+    .pigment:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <span class="eyebrow">Cybernetic Garden · arm composer prototype</span>
+    <h1>Pointillism Pad</h1>
+    <p class="dek">
+      Drag a finger across the grid to place dabs of paint. Submit it and the arm
+      paints it twice: one sheet stays on the wall, one is yours to take home. An
+      example is loaded; clear it to start your own.
+    </p>
+  </header>
+
+  <p class="note" id="demo-note" hidden style="color:var(--accent)">
+    Demo mode: no arm behind this page. Draw and submit to see how it works, but
+    everything stays in this browser.
+  </p>
+
+  <section class="panel" aria-labelledby="queue-title">
+    <div class="queue-head">
+      <h2 id="queue-title">Print queue</h2>
+      <span id="queue-count">checking</span>
+    </div>
+    <div class="queue" id="queue" aria-live="polite"></div>
+  </section>
+
+  <main>
+    <div class="panel">
+      <div class="canvas-frame">
+        <canvas id="dab-canvas" width="480" height="672" role="img"
+                aria-label="Pointillism composition grid, 30 by 42 dabs"></canvas>
+      </div>
+      <div class="canvas-caption">
+        <span>30 × 42 grid · 7 mm pitch on A4 (210 × 294 mm)</span>
+        <span>drag to paint · eraser lifts a dab</span>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="panel">
+        <h2>Pigment</h2>
+        <div class="palette" role="radiogroup" aria-label="Pigment palette">
+          <button class="pigment" id="pigment-carbon" style="background:#14110f" type="button"
+                  role="radio" aria-checked="false" aria-label="Carbon black" data-pigment="carbon"></button>
+          <button class="pigment" id="pigment-titanium" style="background:#f7f5ee" type="button"
+                  role="radio" aria-checked="false" aria-label="Titanium white" data-pigment="titanium"></button>
+          <button class="pigment" id="pigment-ochre" style="background:#c98a2e" type="button"
+                  role="radio" aria-checked="false" aria-label="Ochre" data-pigment="ochre"></button>
+          <button class="pigment" id="pigment-ultramarine" style="background:#2b4c8c" type="button"
+                  role="radio" aria-checked="false" aria-label="Ultramarine" data-pigment="ultramarine"></button>
+          <button class="pigment" id="pigment-venetian" style="background:#a23b2e" type="button"
+                  role="radio" aria-checked="true" aria-label="Venetian red" data-pigment="venetian"></button>
+          <button class="pigment eraser" id="pigment-eraser" type="button"
+                  role="radio" aria-checked="false" aria-label="Eraser, lifts a dab"></button>
+        </div>
+        <p class="note">Five pots, no mixing. Colours sit next to each other and your
+          eye does the blending, the way pointillism works.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Your drawing</h2>
+        <div class="readout">
+          <div class="readout-row"><span>dabs placed</span><span id="dab-count">0</span></div>
+          <div class="readout-row"><span>copies</span><span>2 (wall + yours)</span></div>
+          <div class="readout-row"><span>paint time</span><span id="dab-time">0:00</span></div>
+        </div>
+        <button class="action" id="clear-btn" type="button">Clear grid</button>
+        <button class="action primary" id="submit-btn" type="button">Submit to arm</button>
+        <p id="submit-status" role="status"></p>
+      </div>
+
+      <p class="note">
+        <strong>Why dabs, not strokes:</strong> a continuous line needs steady
+        pressure through the wrist the whole way. A dab is one press and lift, which
+        a robot can repeat reliably.
+      </p>
+    </div>
+  </main>
+
+  <p class="gear">
+    <a href="setup.html" title="Studio setup" aria-label="Studio setup">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M19.4 13a7.8 7.8 0 0 0 0-2l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.5L6.6 11a7.8 7.8 0 0 0 0 2l-2 1.5 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.5zM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5z"/></svg>
+    </a>
+  </p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var COLS = 30, ROWS = 42, SHOW = 5, SECONDS_PER_DAB = 2.4, COPIES = 2, QUEUE_CAP = 50;
+  var API = "/api/jobs";
+  var canvas = document.getElementById("dab-canvas");
+  var ctx = canvas.getContext("2d");
+  var cellPx = canvas.width / COLS;
+
+  var PIGMENTS = {
+    carbon: "#14110f",
+    titanium: "#f7f5ee",
+    ochre: "#c98a2e",
+    ultramarine: "#2b4c8c",
+    venetian: "#a23b2e"
+  };
+
+  var grid = [];
+  for (var r = 0; r < ROWS; r++) grid.push(new Array(COLS).fill(null));
+
+  var selected = "venetian";
+  var painting = false;
+  var lastCell = null;
+  var DEMO = false;          // set when there is no pad_server behind this page
+  var demoJobs = [];
+  var demoNext = 1;
+
+  function seedExample() {
+    var sun = { cx: 21, cy: 9, r: 4 };
+    for (var a = 0; a < 360; a += 18) {
+      var rad = (a * Math.PI) / 180;
+      var c = Math.round(sun.cx + Math.cos(rad) * sun.r);
+      var ro = Math.round(sun.cy + Math.sin(rad) * sun.r);
+      if (ro >= 0 && ro < ROWS && c >= 0 && c < COLS) grid[ro][c] = "ochre";
+    }
+    for (var c2 = sun.cx - 2; c2 <= sun.cx + 2; c2++) {
+      for (var r2 = sun.cy - 2; r2 <= sun.cy + 2; r2++) {
+        if (Math.hypot(c2 - sun.cx, r2 - sun.cy) <= 2) grid[r2][c2] = "ochre";
+      }
+    }
+    for (var x = 0; x < COLS; x++) {
+      var hillY = Math.round(30 + Math.sin(x / 5) * 2.4);
+      for (var y = hillY; y < 34; y++) grid[y][x] = "ultramarine";
+    }
+    for (var x2 = 0; x2 < COLS; x2++) {
+      for (var y2 = 35; y2 < ROWS; y2++) grid[y2][x2] = "venetian";
+    }
+  }
+
+  function drawDabs(target, size, paper, gridLines) {
+    var g = target.getContext("2d");
+    g.fillStyle = paper;
+    g.fillRect(0, 0, target.width, target.height);
+    if (gridLines) {
+      g.strokeStyle = "rgba(128,128,128,0.18)";
+      g.lineWidth = 1;
+      for (var c = 0; c <= COLS; c++) {
+        g.beginPath(); g.moveTo(c * size + 0.5, 0); g.lineTo(c * size + 0.5, target.height); g.stroke();
+      }
+      for (var r = 0; r <= ROWS; r++) {
+        g.beginPath(); g.moveTo(0, r * size + 0.5); g.lineTo(target.width, r * size + 0.5); g.stroke();
+      }
+    }
+    for (var ri = 0; ri < ROWS; ri++) {
+      for (var ci = 0; ci < COLS; ci++) {
+        var p = grid[ri][ci];
+        if (!p) continue;
+        g.beginPath();
+        g.fillStyle = PIGMENTS[p];
+        g.arc(ci * size + size / 2, ri * size + size / 2, size * 0.42, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  }
+
+  function draw() {
+    var bg = getComputedStyle(document.documentElement).getPropertyValue("--paper").trim();
+    drawDabs(canvas, cellPx, bg || "#eef0ea", true);
+  }
+
+  function thumbDataURL() {
+    var t = document.createElement("canvas");
+    t.width = COLS * 4;
+    t.height = ROWS * 4;
+    drawDabs(t, 4, "#f4f2ea", false);
+    return t.toDataURL("image/png");
+  }
+
+  function collectDabs() {
+    var dabs = [];
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        if (grid[r][c]) dabs.push({ col: c, row: r, pigment: grid[r][c] });
+      }
+    }
+    return dabs;
+  }
+
+  function cellFromEvent(evt) {
+    var rect = canvas.getBoundingClientRect();
+    var c = Math.floor(((evt.clientX - rect.left) / rect.width) * COLS);
+    var r = Math.floor(((evt.clientY - rect.top) / rect.height) * ROWS);
+    if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return null;
+    return { c: c, r: r };
+  }
+
+  function paintCell(cell) {
+    if (!cell) return;
+    var key = cell.r + "," + cell.c;
+    if (lastCell === key) return;
+    lastCell = key;
+    grid[cell.r][cell.c] = selected === "eraser" ? null : selected;
+    draw();
+    updateReadout();
+  }
+
+  canvas.addEventListener("pointerdown", function (evt) {
+    painting = true;
+    lastCell = null;
+    canvas.setPointerCapture(evt.pointerId);
+    paintCell(cellFromEvent(evt));
+  });
+  canvas.addEventListener("pointermove", function (evt) {
+    if (painting) paintCell(cellFromEvent(evt));
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(function (name) {
+    canvas.addEventListener(name, function () { painting = false; lastCell = null; });
+  });
+
+  var paletteButtons = document.querySelectorAll(".pigment");
+  paletteButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      paletteButtons.forEach(function (b) { b.setAttribute("aria-checked", "false"); });
+      btn.setAttribute("aria-checked", "true");
+      selected = btn.dataset.pigment || "eraser";
+    });
+  });
+
+  function updateReadout() {
+    var count = collectDabs().length;
+    document.getElementById("dab-count").textContent = String(count);
+    var secs = Math.round(count * COPIES * SECONDS_PER_DAB);
+    var mm = Math.floor(secs / 60), ss = secs % 60;
+    document.getElementById("dab-time").textContent = mm + ":" + String(ss).padStart(2, "0");
+  }
+
+  function clearGrid() {
+    for (var r = 0; r < ROWS; r++) grid[r].fill(null);
+    draw();
+    updateReadout();
+  }
+
+  var statusEl = document.getElementById("submit-status");
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg;
+    statusEl.classList.toggle("error", !!isError);
+  }
+
+  function jobSeconds(job) {
+    return (job.dab_count || 0) * COPIES * SECONDS_PER_DAB;
+  }
+
+  function fmtTime(secs) {
+    secs = Math.round(secs);
+    if (secs >= 3600) {
+      return Math.floor(secs / 3600) + "h " + Math.round((secs % 3600) / 60) + "m";
+    }
+    return Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0");
+  }
+
+  function renderQueue(data) {
+    var box = document.getElementById("queue");
+    var jobs = data.jobs || [];
+    var total = typeof data.total === "number" ? data.total : jobs.length;
+    var queueSecs = jobs.reduce(function (sum, j) { return sum + jobSeconds(j); }, 0);
+    document.getElementById("queue-count").textContent =
+      total + " of " + QUEUE_CAP + " waiting · " + fmtTime(queueSecs) + " to paint";
+    box.textContent = "";
+    if (!total) {
+      var p = document.createElement("p");
+      p.className = "note";
+      p.textContent = "Nothing waiting. Submit now and yours paints first.";
+      box.appendChild(p);
+      return;
+    }
+    jobs.slice(0, SHOW).forEach(function (j, i) {
+      var fig = document.createElement("figure");
+      fig.className = "qthumb" + (i === 0 ? " next" : "");
+      var img;
+      if (typeof j.thumb === "string" && j.thumb.indexOf("data:image/png;base64,") === 0) {
+        img = document.createElement("img");
+        img.src = j.thumb;
+        img.alt = "Queued drawing " + j.id;
+      } else {
+        img = document.createElement("div");
+        img.className = "blank";
+        img.setAttribute("role", "img");
+        img.setAttribute("aria-label", "Queued drawing " + j.id + ", no preview");
+      }
+      var cap = document.createElement("figcaption");
+      cap.textContent = (i === 0 ? "next #" : "#") + j.id;
+      var dur = document.createElement("div");
+      dur.className = "qtime";
+      dur.textContent = fmtTime(jobSeconds(j));
+      fig.appendChild(img);
+      fig.appendChild(cap);
+      fig.appendChild(dur);
+      box.appendChild(fig);
+    });
+    if (total > SHOW) {
+      var more = document.createElement("div");
+      more.className = "qmore";
+      more.title = (total - SHOW) + " more waiting";
+      more.textContent = (total - SHOW) + "+";
+      box.appendChild(more);
+    }
+  }
+
+  function demoData() {
+    return { jobs: demoJobs, total: demoJobs.length };
+  }
+
+  function enterDemo() {
+    if (DEMO) return;
+    DEMO = true;
+    document.getElementById("demo-note").hidden = false;
+  }
+
+  function loadQueue() {
+    if (DEMO) { renderQueue(demoData()); return; }
+    fetch(API, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(renderQueue)
+      .catch(function () { enterDemo(); renderQueue(demoData()); });
+  }
+
+  document.getElementById("clear-btn").addEventListener("click", function () {
+    clearGrid();
+    setStatus("");
+  });
+
+  var submitBtn = document.getElementById("submit-btn");
+  submitBtn.addEventListener("click", function () {
+    var dabs = collectDabs();
+    if (!dabs.length) { setStatus("Place at least one dab first.", true); return; }
+    if (DEMO) {
+      var demo = { id: demoNext++, dab_count: dabs.length, thumb: thumbDataURL(),
+                   submitted_at: Date.now() / 1000 };
+      demoJobs.push(demo);
+      setStatus("Demo only: queued as #" + demo.id + " in this browser. Nothing was sent anywhere.");
+      clearGrid();
+      renderQueue(demoData());
+      return;
+    }
+    submitBtn.disabled = true;
+    setStatus("Sending to the queue...");
+    fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dabs: dabs, thumb: thumbDataURL() })
+    })
+      .then(function (r) {
+        return r.json().then(function (b) {
+          if (!r.ok) throw new Error(b.error || "HTTP " + r.status);
+          return b;
+        });
+      })
+      .then(function (b) {
+        setStatus("Queued as #" + b.id + ", number " + b.position + " in line. Two copies: one for the wall, one for you.");
+        clearGrid();
+        loadQueue();
+      })
+      .catch(function (e) { setStatus("Could not queue it: " + e.message + ".", true); })
+      .then(function () { submitBtn.disabled = false; });
+  });
+
+  seedExample();
+  draw();
+  updateReadout();
+  loadQueue();
+  setInterval(function () { if (!document.hidden) loadQueue(); }, 4000);
+})();
+</script>
+</body>
+</html>
