@@ -1,0 +1,4 @@
+# the studio password, and the state the server builds at runtime
+setup_password.txt
+layout.json
+jobs/

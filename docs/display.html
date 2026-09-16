@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arm Live Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #eef0ea;
+    --paper-panel: #e3e6dc;
+    --ink: #1e2420;
+    --ink-dim: #333a31;
+    --accent: #1b6e73;
+    --live: #c2410c;
+    --nogo: #b3261e;
+    --line: rgba(30, 36, 32, 0.18);
+    --line-strong: rgba(30, 36, 32, 0.40);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #12140f;
+      --paper-panel: #1c1f1a;
+      --ink: #f2f4ec;
+      --ink-dim: #d3dbd1;
+      --accent: #4fd1d9;
+      --live: #ff9d5c;
+      --nogo: #ff8a80;
+      --line: rgba(242, 244, 236, 0.18);
+      --line-strong: rgba(242, 244, 236, 0.42);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #12140f;
+    --paper-panel: #1c1f1a;
+    --ink: #f2f4ec;
+    --ink-dim: #d3dbd1;
+    --accent: #4fd1d9;
+    --live: #ff9d5c;
+    --nogo: #ff8a80;
+    --line: rgba(242, 244, 236, 0.18);
+    --line-strong: rgba(242, 244, 236, 0.42);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Archivo", system-ui, sans-serif;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .sheet { width: 100%; max-width: 1100px; display: flex; flex-direction: column; gap: 14px; }
+
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+
+  h1 { font-size: clamp(1.4rem, 1.1rem + 1.2vw, 2rem); font-weight: 900; margin: 0; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .stats {
+    display: flex;
+    gap: 22px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+    flex-wrap: wrap;
+  }
+
+  .stats b { color: var(--accent); font-weight: 600; }
+
+  .frame {
+    background: var(--paper-panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px;
+  }
+
+  #plan { width: 100%; height: auto; display: block; }
+
+  #now {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 1rem;
+    color: var(--live);
+    min-height: 1.3em;
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .legend {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.75rem;
+    color: var(--ink-dim);
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <div>
+      <span class="eyebrow">Cybernetic Garden · live</span>
+      <h1>Arm Live Plan</h1>
+    </div>
+    <div class="stats">
+      <span>job <b id="s-job">none</b></span>
+      <span>move <b id="s-move">0 / 0</b></span>
+      <span>elapsed <b id="s-time">0:00</b></span>
+      <span>state <b id="s-state">idle</b></span>
+    </div>
+  </header>
+
+  <div class="frame">
+    <svg id="plan" viewBox="-600 -600 1200 1200" role="img"
+         aria-label="Live bird's eye view of the arm workspace and its planned path"></svg>
+  </div>
+
+  <p id="now">Waiting for a run.</p>
+  <div class="legend">
+    <span>front of arm is up</span>
+    <span>faint line: still to do</span>
+    <span>solid line: done</span>
+    <span>dot: where the arm is</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var PIGMENTS = ["#14110f", "#5a8f3c", "#c98a2e", "#2b4c8c", "#a23b2e"];
+  var SLOT_PITCH = 60;
+  var svg = document.getElementById("plan");
+  var layout = null;
+  var run = null;
+
+  function el(name, attrs, parent) {
+    var node = document.createElementNS(SVGNS, name);
+    Object.keys(attrs).forEach(function (k) { node.setAttribute(k, attrs[k]); });
+    (parent || svg).appendChild(node);
+    return node;
+  }
+
+  // base frame (metres) to screen (mm): front (+x) is up, arm's left (+y) is left
+  function sx(y) { return -y * 1000; }
+  function sy(x) { return -x * 1000; }
+
+  function rectFor(place, sizeAcross, sizeDeep) {
+    var swapped = place.rot === 90;
+    var w = swapped ? sizeDeep : sizeAcross;
+    var h = swapped ? sizeAcross : sizeDeep;
+    return { x: sx(place.y) - w / 2, y: sy(place.x) - h / 2, w: w, h: h };
+  }
+
+  function fit() {
+    var xs = [0], ys = [0];
+    function add(x, y) { xs.push(x); ys.push(y); }
+    if (layout) {
+      ["display", "keepsake"].forEach(function (k) {
+        var r = rectFor(layout.sheets[k], 210, 297);
+        add(r.x, r.y); add(r.x + r.w, r.y + r.h);
+      });
+      var p = rectFor(layout.pots, 310, 80);
+      add(p.x, p.y); add(p.x + p.w, p.y + p.h);
+    }
+    if (run && run.points) {
+      run.points.forEach(function (pt) { add(sx(pt[1]), sy(pt[0])); });
+    }
+    var pad = 90;
+    var minX = Math.min.apply(null, xs) - pad, maxX = Math.max.apply(null, xs) + pad;
+    var minY = Math.min.apply(null, ys) - pad, maxY = Math.max.apply(null, ys) + pad;
+    var w = maxX - minX, h = maxY - minY;
+    // keep it square so nothing is stretched
+    var size = Math.max(w, h);
+    return [minX - (size - w) / 2, minY - (size - h) / 2, size, size].join(" ");
+  }
+
+  function draw() {
+    svg.textContent = "";
+    svg.setAttribute("viewBox", fit());
+    if (!layout) return;
+
+    el("circle", { cx: 0, cy: 0, r: 891, fill: "none", stroke: "var(--line)",
+                   "stroke-width": 3, "stroke-dasharray": "12 10" });
+    el("rect", { x: -80, y: -80, width: 160, height: 160, rx: 10,
+                 fill: "var(--paper)", stroke: "var(--line-strong)", "stroke-width": 3 });
+    el("rect", { x: -80, y: 55, width: 160, height: 25, fill: "var(--ink-dim)" });
+
+    layout.nogo.forEach(function (z) {
+      el("rect", { x: sx(z.y) - z.sy * 500, y: sy(z.x) - z.sx * 500,
+                   width: z.sy * 1000, height: z.sx * 1000,
+                   fill: "var(--nogo)", "fill-opacity": 0.14,
+                   stroke: "var(--nogo)", "stroke-width": 2, "stroke-dasharray": "12 9" });
+    });
+
+    ["display", "keepsake"].forEach(function (k) {
+      var r = rectFor(layout.sheets[k], 210, 297);
+      el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: 3,
+                   fill: "var(--paper)", stroke: "var(--line-strong)", "stroke-width": 3 });
+    });
+
+    var pots = layout.pots;
+    var pr = rectFor(pots, 310, 80);
+    el("rect", { x: pr.x, y: pr.y, width: pr.w, height: pr.h, rx: 4,
+                 fill: "var(--paper)", stroke: "var(--line-strong)", "stroke-width": 3 });
+    for (var i = 0; i < 5; i++) {
+      var off = (i - 2) * SLOT_PITCH;
+      var swapped = pots.rot === 90;
+      el("circle", { cx: swapped ? sx(pots.y) : sx(pots.y) + off,
+                     cy: swapped ? sy(pots.x) + off : sy(pots.x),
+                     r: 20, fill: PIGMENTS[i], stroke: "var(--line-strong)", "stroke-width": 2 });
+    }
+
+    if (run && run.points && run.points.length > 1) {
+      var done = Math.max(0, Math.min(run.points.length, run.index));
+      var path = function (from, to) {
+        return run.points.slice(from, to).map(function (pt, n) {
+          return (n === 0 ? "M " : "L ") + sx(pt[1]) + " " + sy(pt[0]);
+        }).join(" ");
+      };
+      el("path", { d: path(0, run.points.length), fill: "none", stroke: "var(--accent)",
+                   "stroke-opacity": 0.28, "stroke-width": 5, "stroke-linejoin": "round" });
+      if (done > 1) {
+        el("path", { d: path(0, done), fill: "none", stroke: "var(--accent)",
+                     "stroke-width": 6, "stroke-linejoin": "round" });
+      }
+    }
+
+    if (run && run.at && run.at[0] !== null && run.at[0] !== undefined) {
+      var cx = sx(run.at[1]), cy = sy(run.at[0]);
+      el("circle", { cx: cx, cy: cy, r: 34, fill: "var(--live)", "fill-opacity": 0.22 });
+      el("circle", { cx: cx, cy: cy, r: 15, fill: "var(--live)" });
+    }
+  }
+
+  function fmt(secs) {
+    secs = Math.max(0, Math.round(secs));
+    return Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0");
+  }
+
+  function paintStats() {
+    var live = run && run.state === "running";
+    document.getElementById("s-job").textContent = run && run.job ? "#" + run.job : "none";
+    document.getElementById("s-move").textContent = run ? (run.index + " / " + run.total) : "0 / 0";
+    document.getElementById("s-state").textContent = run ? run.state : "idle";
+    document.getElementById("s-time").textContent =
+      run && run.started ? fmt((live ? Date.now() / 1000 : run.updated) - run.started) : "0:00";
+    document.getElementById("now").textContent =
+      run && run.label ? run.label : (live ? "Starting." : "Waiting for a run.");
+  }
+
+  function poll() {
+    Promise.all([
+      fetch("/api/layout", { cache: "no-store" }).then(function (r) { return r.json(); }),
+      fetch("/api/run", { cache: "no-store" }).then(function (r) { return r.json(); })
+    ]).then(function (both) {
+      layout = both[0];
+      run = both[1];
+      draw();
+      paintStats();
+    }).catch(function () {
+      document.getElementById("now").textContent = "No arm behind this page.";
+    });
+  }
+
+  poll();
+  setInterval(function () { if (!document.hidden) poll(); }, 500);
+})();
+</script>
+</body>
+</html>

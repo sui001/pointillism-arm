@@ -14,6 +14,11 @@ Nothing moves the arm automatically: paint_sim.py is run by hand.
 Jobs are written to ~/kinova/jobs/<id>.json and reloaded on start, so a
 restart no longer empties the queue. The layout lives in ~/kinova/layout.json.
 
+The setup page and saving a layout need a password, since the layout becomes
+arm positions and the pad is on a public URL. It is read from SETUP_PASSWORD or
+from setup_password.txt beside this file, and neither is ever committed. With no
+password set, the setup page is refused outright rather than left open.
+
     GET  /api/jobs        queue summary, oldest (next to paint) first
     POST /api/jobs        submit {dabs, thumb}; queued as 2 copies
     GET  /api/jobs/<id>   full job, for paint_sim.py
@@ -25,7 +30,9 @@ Base frame, metres: +x is the front of the arm (away from the base panel),
 
     BIND=0.0.0.0 PORT=8010 ~/kinova-py310/bin/python ~/kinova/pad_server.py
 """
+import base64
 import glob
+import hmac
 import json
 import math
 import os
@@ -38,10 +45,13 @@ DIR = os.path.dirname(os.path.abspath(__file__))
 BIND = os.environ.get("BIND") or "127.0.0.1"
 JOBS_DIR = os.path.join(DIR, "jobs")
 LAYOUT_PATH = os.path.join(DIR, "layout.json")
-PAGES = ("/pad.html", "/setup.html")
+PASSWORD_PATH = os.path.join(DIR, "setup_password.txt")
+PAGES = ("/pad.html", "/setup.html", "/display.html")
+GUARDED = "/setup.html"
+MAX_POINTS = 4000
 
 GRID = {"cols": 30, "rows": 42, "pitch_mm": 7}
-PIGMENTS = ("carbon", "titanium", "ochre", "ultramarine", "venetian")
+PIGMENTS = ("carbon", "green", "ochre", "ultramarine", "venetian")
 COPIES = [{"slot": "display"}, {"slot": "keepsake"}]
 THUMB_PREFIX = "data:image/png;base64,"
 MAX_BODY = 512 * 1024
@@ -65,6 +75,10 @@ DEFAULT_LAYOUT = {
 _lock = threading.Lock()
 _jobs = []
 _next_id = 1
+# what paint_sim is doing right now, for display.html. Runtime only.
+_run = {"state": "idle", "job": None, "total": 0, "index": 0,
+        "points": [], "labels": [], "label": "", "at": None,
+        "started": 0.0, "updated": 0.0}
 
 
 def clean_dabs(raw):
@@ -157,6 +171,18 @@ def save_job(job):
     os.replace(tmp, os.path.join(JOBS_DIR, "{}.json".format(job["id"])))
 
 
+def setup_password():
+    """From SETUP_PASSWORD, else setup_password.txt beside this file. Never committed."""
+    value = os.environ.get("SETUP_PASSWORD")
+    if value:
+        return value.strip()
+    try:
+        with open(PASSWORD_PATH) as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
+
+
 def summary(job, with_thumb=True):
     out = {k: job[k] for k in ("id", "dab_count", "submitted_at")}
     out["thumb"] = job["thumb"] if with_thumb else ""
@@ -176,6 +202,28 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def authorised(self):
+        """Basic auth on the setup page and on saving a layout. No password, no entry."""
+        wanted = setup_password()
+        if not wanted:
+            return False
+        header = self.headers.get("Authorization", "")
+        if not header.startswith("Basic "):
+            return False
+        try:
+            decoded = base64.b64decode(header[6:]).decode("utf-8", "replace")
+        except Exception:
+            return False
+        given = decoded.split(":", 1)[1] if ":" in decoded else ""
+        return hmac.compare_digest(given, wanted)
+
+    def demand_password(self):
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="Studio setup"')
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def read_body(self):
         length = int(self.headers.get("Content-Length") or 0)
         if length <= 0 or length > MAX_BODY:
@@ -190,6 +238,9 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/layout":
             with _lock:
                 return self.send_json(200, read_layout())
+        if self.path == "/api/run":
+            with _lock:
+                return self.send_json(200, dict(_run))
         if self.path.startswith("/api/jobs/"):
             try:
                 jid = int(self.path.rsplit("/", 1)[1])
@@ -202,13 +253,18 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(200, job)
         if self.path == "/":
             self.path = "/pad.html"
-        if self.path.split("?")[0] not in PAGES:
+        page = self.path.split("?")[0]
+        if page not in PAGES:
             return self.send_json(404, {"error": "not found"})
+        if page == GUARDED and not self.authorised():
+            return self.demand_password()
         super().do_GET()
 
     def do_PUT(self):
         if self.path != "/api/layout":
             return self.send_json(404, {"error": "unknown endpoint"})
+        if not self.authorised():
+            return self.demand_password()
         try:
             layout = clean_layout(self.read_body())
         except Exception as e:
@@ -220,8 +276,42 @@ class Handler(SimpleHTTPRequestHandler):
             os.replace(tmp, LAYOUT_PATH)
         self.send_json(200, layout)
 
+    def post_run(self):
+        """paint_sim reporting what it is about to do, and then where it is."""
+        if not self.authorised():
+            return self.demand_password()
+        try:
+            data = self.read_body()
+        except Exception:
+            return self.send_json(400, {"error": "bad body"})
+        event = data.get("event")
+        now = time.time()
+        with _lock:
+            if event == "plan":
+                _run.update({
+                    "state": "running",
+                    "job": data.get("job"),
+                    "total": int(data.get("total") or 0),
+                    "points": (data.get("points") or [])[:MAX_POINTS],
+                    "labels": (data.get("labels") or [])[:MAX_POINTS],
+                    "index": 0, "label": "", "at": None,
+                    "started": now, "updated": now,
+                })
+            elif event == "progress":
+                _run.update({
+                    "index": int(data.get("index") or 0),
+                    "label": str(data.get("label") or "")[:120],
+                    "at": [data.get("x"), data.get("y"), data.get("z")],
+                    "updated": now,
+                })
+            else:
+                _run.update({"state": str(event or "done")[:20], "updated": now})
+        return self.send_json(200, {"ok": True})
+
     def do_POST(self):
         global _next_id
+        if self.path == "/api/run":
+            return self.post_run()
         if self.path != "/api/jobs":
             return self.send_json(404, {"error": "unknown endpoint"})
         try:

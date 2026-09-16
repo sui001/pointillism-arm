@@ -33,6 +33,7 @@ KINOVA_DIP         dip depth in m, default 0.04
 KINOVA_GRIP_DWELL  pretend gripper time in s per pick up or put down, default 1.2
 KINOVA_PAD_URL     default http://127.0.0.1:8010
 """
+import base64
 import json
 import math
 import os
@@ -64,7 +65,7 @@ GRIP_DWELL = float(os.environ.get("KINOVA_GRIP_DWELL", "1.2"))
 ARMED = os.environ.get("KINOVA_CONFIRM") == "yes"
 PAD = os.environ.get("KINOVA_PAD_URL", "http://127.0.0.1:8010")
 
-PIGMENT_ORDER = ("carbon", "titanium", "ochre", "ultramarine", "venetian")
+PIGMENT_ORDER = ("carbon", "green", "ochre", "ultramarine", "venetian")
 SLOT_PITCH = 0.06           # pot spacing, matches the setup page
 DOWN = (180.0, 0.0, 90.0)   # tool pointing at the desk
 DIP_EVERY = 8               # touches per load of paint
@@ -89,6 +90,34 @@ if HOVER_Z - DIP < MIN_Z:
 def fetch(path):
     with urllib.request.urlopen(PAD + path, timeout=5) as r:
         return json.load(r)
+
+
+def studio_password():
+    value = os.environ.get("SETUP_PASSWORD")
+    if value:
+        return value.strip()
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "setup_password.txt")) as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
+
+
+def report(payload):
+    """Tell display.html what we are doing. Never worth failing a run over."""
+    if not ARMED:
+        return
+    password = studio_password()
+    if not password:
+        return
+    token = base64.b64encode(("studio:" + password).encode()).decode()
+    request = urllib.request.Request(
+        PAD + "/api/run", data=json.dumps(payload).encode(), method="POST",
+        headers={"Content-Type": "application/json", "Authorization": "Basic " + token})
+    try:
+        urllib.request.urlopen(request, timeout=2).read()
+    except Exception:
+        pass
 
 
 def load_job():
@@ -404,6 +433,9 @@ try:
         raise SystemExit(0)
 
     print("\nMOVING. Hand on the E-stop. Ctrl-C stops the arm.\n")
+    report({"event": "plan", "job": job["id"], "total": len(moves),
+            "points": [[m[1], m[2], m[3]] for m in moves],
+            "labels": [m[0] for m in moves]})
     handle = base.OnNotificationActionTopic(on_event, Base_pb2.NotificationOptions())
     moving = True
     prev = start
@@ -411,6 +443,7 @@ try:
     for i, (label, x, y, z, dwell) in enumerate(moves, 1):
         if math.dist(prev, (x, y, z)) >= 0.001:
             print("  [{:>6.1f}s] {:>3}/{}  {}".format(time.time() - t0, i, len(moves), label))
+            report({"event": "progress", "index": i, "label": label, "x": x, "y": y, "z": z})
             reach_pose(x, y, z, DOWN, label)
             prev = (x, y, z)
         if dwell:
@@ -418,10 +451,12 @@ try:
     print("  returning to the start pose")
     reach_pose(start[0], start[1], start[2], start_theta, "return to start")
     moving = False
+    report({"event": "done"})
     print("\ndone: {} moves in {:.0f} s, both copies visited.".format(len(moves), time.time() - t0))
 except KeyboardInterrupt:
     if moving:
         base.Stop()
+        report({"event": "stopped"})
     print("\ninterrupted. Sent Stop().")
 finally:
     if handle is not None:
