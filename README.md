@@ -41,6 +41,7 @@ the blending.
 | `run_queue.py` | Paints the whole queue, oldest first, pausing between jobs for someone to change the paper |
 | `goto_pose.py` | Parks the arm at a factory pose, Home nearly always. What the queue tells you to run when it refuses to start |
 | `jog_joint.py` | Moves one joint at a time, for recovering from a pose that a whole-pose move should not be trusted with |
+| `soft_limits.py` | Shows the arm's kinematic soft limits and sets the ones a painting uses. Will not write while the arm is moving |
 | `notify.py` | Beeps a GPIO buzzer when a painting is done, and waits for a mouse click to start the next |
 | `kenv.py` | Reads arm credentials from `/etc/kinova.env` so they stay off the command line |
 
