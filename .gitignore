@@ -2,3 +2,7 @@
 setup_password.txt
 layout.json
 jobs/
+
+# python bytecode, created by running anything here
+__pycache__/
+*.pyc
