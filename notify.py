@@ -16,7 +16,9 @@ piezo has no oscillator of its own and only clicks without a frequency to
 follow. An active buzzer gates its own oscillator and sounds fine either way,
 so PWM covers both and needs no knowledge of which one is plugged in.
 Piezos are loudest near resonance, usually 2 to 4 kHz: `notify.py sweep`
-plays a range so you can pick the one that carries in the room.
+plays a range so you can pick the one that carries in the room. Sui picked
+3000 Hz by ear on the piece's own piezo, five beeps, which is the default
+here. Override with KINOVA_BUZZER_HZ.
 
 The click is any plain USB mouse. It reads /dev/input/event* directly, so there
 is nothing to install, and the pi user is already in the input group. It does
@@ -36,7 +38,7 @@ import sys
 import time
 
 BUZZER_PIN = int(os.environ.get("KINOVA_BUZZER_PIN", "18"))
-BUZZER_HZ = float(os.environ.get("KINOVA_BUZZER_HZ", "2700"))
+BUZZER_HZ = float(os.environ.get("KINOVA_BUZZER_HZ", "3000"))
 
 # struct input_event: two longs of timestamp, then type, code, value
 EVENT_FORMAT = "llHHi"
@@ -46,7 +48,7 @@ BTN_LEFT = 0x110
 RESCAN_EVERY = 5.0
 
 
-def beep(times=2, on=0.18, gap=0.12, hz=None):
+def beep(times=5, on=0.2, gap=0.15, hz=None):
     """Drive the buzzer pin. True means the pin was driven, NOT that a sound happened.
 
     Nothing here can tell whether a buzzer is actually wired to it, so do not
@@ -131,13 +133,16 @@ if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "beep"
     if what == "beep":
         if beep():
-            print("drove BCM {} twice at {:.0f} Hz. Heard nothing? Either nothing is "
+            print("drove BCM {} five times at {:.0f} Hz. Heard nothing? Either nothing is "
                   "wired there yet, or try `notify.py sweep`.".format(BUZZER_PIN, BUZZER_HZ))
         else:
             print("could not drive BCM {} at all.".format(BUZZER_PIN))
     elif what == "sweep":
-        print("sweeping BCM {}, listen for the loudest".format(BUZZER_PIN))
-        sweep()
+        args = [int(a) for a in sys.argv[2:5]]
+        low, high, step = (args + [1000, 4500, 500][len(args):])[:3]
+        print("sweeping BCM {} from {} to {} Hz, listen for the loudest"
+              .format(BUZZER_PIN, low, high))
+        sweep(low, high, step)
     elif what == "wait":
         print("waiting for a left click, Ctrl-C to give up")
         try:

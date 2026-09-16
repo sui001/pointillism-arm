@@ -137,7 +137,7 @@ def main():
         mark_done(job["id"])
         painted += 1
         print("\nJob #{} painted. Take both sheets off and put blank paper down.".format(job["id"]))
-        notify.beep(2)
+        notify.beep()
         print("Left click the mouse when the paper is ready.")
         notify.wait_for_click()
         print("Off we go.\n")
