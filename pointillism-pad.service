@@ -1,0 +1,21 @@
+[Unit]
+Description=Pointillism pad: visitor pad, print queue, rig layout and live display
+Documentation=https://github.com/sui001/pointillism-arm
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/kinova
+# The server is standard library only, so the system python is enough.
+# Only paint_sim.py needs the kortex virtualenv.
+ExecStart=/usr/bin/python3 /home/pi/kinova/pad_server.py
+Environment=PORT=8010
+# BIND defaults to 127.0.0.1 on purpose. Publish it with `tailscale funnel`,
+# or set BIND=0.0.0.0 to put it on the local network instead.
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

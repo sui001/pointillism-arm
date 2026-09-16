@@ -32,7 +32,9 @@ the blending.
 | File | What it does |
 |---|---|
 | `pad.html` | The visitor's pad: grid, palette, print queue with per job and total paint times |
-| `setup.html` | Bird's eye plan of the rig. Drag the sheets and pot block onto where they really are, set the sweep the arm may work in, add no-go boxes |
+| `setup.html` | Bird's eye plan of the rig. Drag the sheets and pot block onto where they really are, set the sweep the arm may work in, add no-go boxes. Behind a password |
+| `display.html` | For a screen on the wall: the planned path, how much is done, and a live marker where the arm is |
+| `pointillism-pad.service` | systemd unit, so the Pi serves the pad from boot |
 | `pad_server.py` | Serves both pages, holds the queue on disk, stores the layout. Standard library only |
 | `paint_sim.py` | Walks a queued job through every arm movement, with no paint and no contact |
 | `kenv.py` | Reads arm credentials from `/etc/kinova.env` so they stay off the command line |
@@ -60,15 +62,56 @@ The arm is a real machine on a desk, so the sim refuses rather than guesses:
 - It will not move unless the arm is idle and parked at Home first.
 - Without `KINOVA_CONFIRM=yes` it prints the plan and moves nothing.
 
-## Running it against a real arm
+## Running it
 
-Needs a host on the arm's network with `kortex_api` 2.7.0 and `protobuf` 3.20.0
-(the Kortex 2.x wheels, not 3.x). Then:
+It runs on a Raspberry Pi 5 sitting on the same wired network as the arm. The Pi
+is the only thing that talks to the arm, and it serves all three pages.
+
+`pad_server.py` is standard library only, so the system Python runs it. Only
+`paint_sim.py` needs the Kinova SDK, and that wants `kortex_api` 2.7.0 with
+`protobuf` 3.20.0 exactly. Those are the Kortex 2.x wheels, not 3.x: 3.x dropped
+the TCP transport that 2.x arm firmware speaks.
+
+Once the Pi is on your network and can reach the arm:
 
 ```sh
-python3 pad_server.py                 # serves the pad on 127.0.0.1:8010
+git clone https://github.com/sui001/pointillism-arm.git ~/kinova
+cd ~/kinova
+printf 'your-password-here\n' > setup_password.txt   # gitignored, never committed
+chmod 600 setup_password.txt
+
+python3 pad_server.py                    # pad on 127.0.0.1:8010
 KINOVA_JOB=latest python3 paint_sim.py   # prints the plan, moves nothing
 ```
+
+The arm's address defaults to `192.168.1.10` and is set with `KINOVA_IP`.
+Credentials come from `/etc/kinova.env` so they stay off the command line.
+
+### Starting on its own
+
+So that anyone can plug the Pi in, switch it on, and have the pad come up:
+
+```sh
+sudo cp pointillism-pad.service /etc/systemd/system/
+sudo systemctl enable --now pointillism-pad
+systemctl status pointillism-pad
+```
+
+The queue and the layout are files on the Pi, so both survive a restart.
+
+### Getting to it from a tablet
+
+The server binds to `127.0.0.1` deliberately, so it is not on the local network
+until you choose how to publish it. Two ways:
+
+- **Private, for devices you control:** put the Pi on a [Tailscale](https://tailscale.com)
+  network and run `sudo tailscale funnel --bg 8010`. That gives an HTTPS address
+  that works from any device, and it survives reboots.
+- **Local network only:** set `BIND=0.0.0.0` in the service file and reach it at
+  the Pi's own address on port 8010.
+
+Either way the setup page stays behind the password. The pad and the display do
+not, so put this somewhere you are happy for people to reach.
 
 ## Status
 
