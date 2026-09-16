@@ -95,6 +95,8 @@ HOME_TOL = 5.0              # deg per joint
 MOVE_TIMEOUT = 30
 BUSY_EXIT = 75              # "ask again in a moment", the one exit worth a retry
 NOT_HOME_EXIT = 76          # "park me first", which run_queue can offer to do
+RECOVERIES = int(os.environ.get("KINOVA_RECOVERIES", "25"))
+recovered = [0]             # how many times a refused move was rescued via Home
 
 if not USER or not PASS:
     sys.exit("Set KINOVA_USER and KINOVA_PASS, or fill /etc/kinova.env.")
@@ -463,26 +465,70 @@ def angdiff(a, b):
     return abs(((a - b + 180.0) % 360.0) - 180.0)
 
 
-def reach_pose(x, y, z, theta, name, speed=None):
+def park_at_home(speed=20.0):
+    """Joint move to Home, to put the arm back into a configuration it knows.
+
+    Measuring every corner of a sheet from Home says each one is reachable and
+    comfortable. What fails is arriving at one from wherever the last dab left
+    the arm: the two sheets suit different configurations, so a few dabs after
+    swapping back the arm runs out of joint. Home is the way out of that corner.
+    """
+    targets = home_angles()
+    if not targets:
+        return False
     act = Base_pb2.Action()
-    act.name = name
-    pose = act.reach_pose
-    pose.constraint.speed.translation = speed or SPEED
-    pose.constraint.speed.orientation = 30.0
-    t = pose.target_pose
-    t.x, t.y, t.z = x, y, z
-    t.theta_x, t.theta_y, t.theta_z = theta
+    act.name = "recover to Home"
+    reach = act.reach_joint_angles
+    reach.constraint.type = Base_pb2.JOINT_CONSTRAINT_SPEED
+    reach.constraint.value = speed
+    for i, value in enumerate(targets):
+        ja = reach.joint_angles.joint_angles.add()
+        ja.joint_identifier = i
+        ja.value = value
     done.clear()
     result.clear()
     base.ExecuteAction(act)
-    if not done.wait(MOVE_TIMEOUT):
+    if not done.wait(180):
         base.Stop()
-        raise SystemExit("Timed out on '{}'. Sent Stop(), check the arm.".format(name))
-    if result.get("event") != Base_pb2.ACTION_END:
-        raise SystemExit(
-            "Arm aborted '{}'.\nreason: {}\ntarget was x={:+.3f} y={:+.3f} z={:+.3f},"
-            " {:.3f} m out from the base.\nStopped here, check the arm.".format(
-                name, why(result.get("notification")), x, y, z, math.hypot(x, y)))
+        return False
+    return result.get("event") == Base_pb2.ACTION_END
+
+
+def reach_pose(x, y, z, theta, name, speed=None):
+    while True:
+        act = Base_pb2.Action()
+        act.name = name
+        pose = act.reach_pose
+        pose.constraint.speed.translation = speed or SPEED
+        pose.constraint.speed.orientation = 30.0
+        t = pose.target_pose
+        t.x, t.y, t.z = x, y, z
+        t.theta_x, t.theta_y, t.theta_z = theta
+        done.clear()
+        result.clear()
+        base.ExecuteAction(act)
+        if not done.wait(MOVE_TIMEOUT):
+            base.Stop()
+            raise SystemExit("Timed out on '{}'. Sent Stop(), check the arm.".format(name))
+        if result.get("event") == Base_pb2.ACTION_END:
+            break
+
+        detail = why(result.get("notification"))
+        stop = ("Arm aborted '{}'.\nreason: {}\ntarget was x={:+.3f} y={:+.3f} "
+                "z={:+.3f}, {:.3f} m out from the base.".format(
+                    name, detail, x, y, z, math.hypot(x, y)))
+        if recovered[0] >= RECOVERIES:
+            raise SystemExit(stop + "\nOut of recoveries ({}). Stopped here.\n"
+                             "Raise KINOVA_RECOVERIES if this is worth more.".format(
+                                 RECOVERIES))
+        recovered[0] += 1
+        print("\n  {}".format(stop.replace("\n", "\n  ")))
+        print("  recovery {} of {}: back to Home, then this move again.\n".format(
+            recovered[0], RECOVERIES))
+        if not park_at_home():
+            raise SystemExit(
+                "Could not get back to Home after '{}'. Stopped, check the arm."
+                .format(name))
     fb = cyclic.RefreshFeedback()
     if fb.base.fault_bank_a or fb.base.fault_bank_b:
         base.Stop()
@@ -572,6 +618,10 @@ try:
     moving = False
     report({"event": "done"})
     print("\ndone: {} moves in {:.0f} s, both copies visited.".format(len(moves), time.time() - t0))
+    if recovered[0]:
+        print("It took {} trip(s) back to Home to get through refused moves. That is"
+              " worth knowing: it means the plan keeps walking the arm into corners."
+              .format(recovered[0]))
 except KeyboardInterrupt:
     if moving:
         base.Stop()

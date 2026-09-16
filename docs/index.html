@@ -345,6 +345,30 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .qbar {
+    height: 6px;
+    border: 1px solid var(--line-strong);
+    border-radius: 3px;
+    overflow: hidden;
+    background: var(--paper-panel-2);
+    margin-top: 2px;
+  }
+
+  .qbar span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.6s linear;
+  }
+
+  .qpct {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.68rem;
+    color: var(--ink-dim);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
   .gear {
     display: flex;
     justify-content: center;
@@ -626,7 +650,7 @@
     return Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0");
   }
 
-  function renderQueue(data) {
+  function renderQueue(data, run) {
     var box = document.getElementById("queue");
     var jobs = data.jobs || [];
     var total = typeof data.total === "number" ? data.total : jobs.length;
@@ -659,10 +683,36 @@
       cap.textContent = (i === 0 ? "next #" : "#") + j.id;
       var dur = document.createElement("div");
       dur.className = "qtime";
-      dur.textContent = fmtTime(jobSeconds(j));
       fig.appendChild(img);
       fig.appendChild(cap);
       fig.appendChild(dur);
+
+      // The arm reports which job it is on, so only mark that one as painting.
+      // Any other job is still waiting, however far along the arm happens to be.
+      var painting = run && run.state === "running" && run.job === j.id
+        && typeof run.total === "number" && run.total > 0;
+      if (painting) {
+        var frac = Math.max(0, Math.min(1, (run.index || 0) / run.total));
+        cap.textContent = "painting #" + j.id;
+        dur.textContent = fmtTime(jobSeconds(j) * (1 - frac)) + " left";
+        var bar = document.createElement("div");
+        bar.className = "qbar";
+        bar.setAttribute("role", "progressbar");
+        bar.setAttribute("aria-valuemin", "0");
+        bar.setAttribute("aria-valuemax", "100");
+        bar.setAttribute("aria-valuenow", String(Math.round(frac * 100)));
+        bar.setAttribute("aria-label", "Painting progress for drawing " + j.id);
+        var fill = document.createElement("span");
+        fill.style.width = (frac * 100).toFixed(1) + "%";
+        bar.appendChild(fill);
+        var pct = document.createElement("div");
+        pct.className = "qpct";
+        pct.textContent = Math.round(frac * 100) + "% · " + (run.index || 0) + " of " + run.total;
+        fig.appendChild(bar);
+        fig.appendChild(pct);
+      } else {
+        dur.textContent = fmtTime(jobSeconds(j));
+      }
       box.appendChild(fig);
     });
     if (total > SHOW) {
@@ -686,9 +736,16 @@
 
   function loadQueue() {
     if (DEMO) { renderQueue(demoData()); return; }
-    fetch(API, { cache: "no-store" })
-      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(renderQueue)
+    // The run state is a separate endpoint and a nice-to-have, so a failure to
+    // read it must not cost us the queue itself.
+    Promise.all([
+      fetch(API, { cache: "no-store" })
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }),
+      fetch("/api/run", { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; })
+    ])
+      .then(function (both) { renderQueue(both[0], both[1]); })
       .catch(function () { enterDemo(); renderQueue(demoData()); });
   }
 
