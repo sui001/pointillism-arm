@@ -94,6 +94,7 @@ SAMPLES = 24                # points checked along each straight move
 HOME_TOL = 5.0              # deg per joint
 MOVE_TIMEOUT = 30
 BUSY_EXIT = 75              # "ask again in a moment", the one exit worth a retry
+NOT_HOME_EXIT = 76          # "park me first", which run_queue can offer to do
 
 if not USER or not PASS:
     sys.exit("Set KINOVA_USER and KINOVA_PASS, or fill /etc/kinova.env.")
@@ -393,7 +394,37 @@ def on_event(notification):
     ev = notification.action_event
     if ev in (Base_pb2.ACTION_END, Base_pb2.ACTION_ABORT):
         result["event"] = ev
+        result["notification"] = notification
         done.set()
+
+
+def enum_name(enum, value):
+    """Enum names move between kortex versions, so never die trying to read one."""
+    try:
+        return getattr(Base_pb2, enum).Name(value)
+    except Exception:
+        return "unrecognised"
+
+
+def why(notification):
+    """Say why the arm refused a move, not just that it did.
+
+    An abort here stops a painting dead and leaves the arm wherever it got to,
+    so this is the one line that decides whether the next person can fix it or
+    has to go digging. The arm does give a reason; printing only the move name
+    threw it away.
+    """
+    if notification is None:
+        return "no detail given"
+    bits = []
+    code = getattr(notification, "abort_details", 0)
+    if code:
+        bits.append("{} ({})".format(enum_name("SubErrorCodes", code), code))
+    for entry in getattr(notification, "trajectory_info", []):
+        bits.append("{} on joint {}".format(
+            enum_name("TrajectoryInfoType", entry.trajectory_info_type),
+            getattr(entry, "joint_index", "?")))
+    return "; ".join(bits) if bits else "no detail given"
 
 
 def home_angles():
@@ -426,7 +457,10 @@ def reach_pose(x, y, z, theta, name, speed=None):
         base.Stop()
         raise SystemExit("Timed out on '{}'. Sent Stop(), check the arm.".format(name))
     if result.get("event") != Base_pb2.ACTION_END:
-        raise SystemExit("Arm aborted '{}'. Stopped here, check the arm.".format(name))
+        raise SystemExit(
+            "Arm aborted '{}'.\nreason: {}\ntarget was x={:+.3f} y={:+.3f} z={:+.3f},"
+            " {:.3f} m out from the base.\nStopped here, check the arm.".format(
+                name, why(result.get("notification")), x, y, z, math.hypot(x, y)))
     fb = cyclic.RefreshFeedback()
     if fb.base.fault_bank_a or fb.base.fault_bank_b:
         base.Stop()
@@ -482,7 +516,11 @@ try:
         how = ("Start from Home so the first Cartesian move is predictable:\n"
                "  KINOVA_TARGET=Home KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/goto_pose.py")
         if ARMED:
-            raise SystemExit("Refusing: not at Home.\n" + how)
+            # Its own code, because this is the one refusal with an obvious
+            # remedy, and run_queue can offer that remedy on a click instead of
+            # sending whoever is standing there off to find a terminal.
+            print("Refusing: not at Home.\n" + how, file=sys.stderr)
+            raise SystemExit(NOT_HOME_EXIT)
         print("NOTE: " + how)
 
     if not ARMED:

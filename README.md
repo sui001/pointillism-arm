@@ -83,6 +83,41 @@ moves one joint at a time instead, which is predictable:
 KINOVA_JOINT=3 KINOVA_ANGLE=0 KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/jog_joint.py
 ```
 
+## When a painting stops
+
+A job stops rather than guesses, so a stop is normal and recoverable. The runner
+stays up and waits for a click, and the queue keeps the job.
+
+**See what happened.** Everything is in the journal, newest last:
+
+```sh
+journalctl -u pointillism-queue -n 50 --no-pager   # what just happened
+journalctl -u pointillism-queue -f                 # watch it live
+```
+
+The last few lines say which move stopped it and why. Three things turn up:
+
+| What it says | What it means | What to do |
+|---|---|---|
+| `not parked at Home` | The job before it stopped somewhere | Click. The runner parks it and starts |
+| `Arm aborted '<move>'` with a `reason:` | The arm refused that position | Read the reason and the reach it prints |
+| `not SERVOING_READY` | Something else holds the arm | See below |
+
+**Something else holds the arm.** The arm reports `MANUALLY_CONTROLLED` when the
+Kortex web app has it, a gamepad is plugged into the base, or the wrist button put
+it in admittance mode. Close or unplug whichever it is. That page lives on the
+arm's own wired network, so only the Pi can reach it, not a laptop on wifi.
+
+**Park it by hand**, if you ever need to without the runner:
+
+```sh
+KINOVA_TARGET=Home KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/goto_pose.py
+```
+
+**Start again.** Nothing else is needed: the job is still queued, so put paper down
+and click. If the arm is somewhere a whole-pose move should not be trusted with,
+walk it back a joint at a time with `jog_joint.py` first.
+
 ## Running it
 
 It runs on a Raspberry Pi 5 sitting on the same wired network as the arm. The Pi

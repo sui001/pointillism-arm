@@ -43,6 +43,8 @@ SIM = os.path.join(HERE, "paint_sim.py")
 RETRY_PAUSE = 12
 IDLE_POLL = 5
 BUSY_EXIT = 75          # paint_sim's "the arm is busy", and it must match there
+NOT_HOME_EXIT = 76      # paint_sim's "park me first", likewise
+PARK = os.path.join(HERE, "goto_pose.py")
 
 
 def studio_password():
@@ -79,27 +81,34 @@ def mark_done(job_id):
 
 
 def paint(job_id):
-    """Hand one job to paint_sim. A busy arm is worth another go, a refusal is not."""
+    """Hand one job to paint_sim and give back its exit code.
+
+    A busy arm is the one failure worth another go. Everything else stands until
+    something changes, so it comes straight back rather than being tried twice
+    more in silence: from the room that looked exactly like a dead mouse, when
+    the clicks had been read correctly all along.
+    """
     env = os.environ.copy()
     env["KINOVA_JOB"] = str(job_id)
+    code = 1
     for attempt in range(1, ATTEMPTS + 1):
         if attempt > 1:
             print("\n  attempt {} of {}".format(attempt, ATTEMPTS))
         code = subprocess.run([sys.executable, SIM], env=env).returncode
-        if code == 0:
-            return True
         if code != BUSY_EXIT:
-            # Three silent goes at a standing refusal look, from the room,
-            # exactly like a dead mouse: you click, nothing moves, it beeps
-            # again half a minute later. The click was fine every time. Say
-            # what happened instead of quietly trying it twice more.
-            print("\n  paint_sim refused, and trying again cannot clear that.")
-            print("  Its reason is the line just above.")
-            return False
+            return code
         if attempt < ATTEMPTS:
             print("  the arm was still busy, another go in {}s".format(RETRY_PAUSE))
             time.sleep(RETRY_PAUSE)
-    return False
+    return code
+
+
+def park():
+    """Send the arm to Home, the way the failure message used to tell you to."""
+    env = os.environ.copy()
+    env["KINOVA_TARGET"] = "Home"
+    env["KINOVA_CONFIRM"] = "yes"
+    return subprocess.run([sys.executable, PARK], env=env).returncode == 0
 
 
 def main():
@@ -144,14 +153,32 @@ def main():
         notify.wait_for_click()
         print("Off we go.\n")
 
-        if not paint(job["id"]):
+        code = paint(job["id"])
+
+        if code == NOT_HOME_EXIT:
+            # Much the commonest way a session goes wrong: a job before this one
+            # stopped somewhere, so this one will not start, and the fix was a
+            # command typed into a terminal nobody has open during a show.
+            # Parking is a large move, so it waits for the same click every
+            # other movement here waits for.
+            print("\nThe arm is not parked at Home, so job #{} cannot start."
+                  .format(job["id"]))
+            print("Stand clear, then click to park it at Home and begin.")
+            notify.beep()
+            notify.wait_for_click()
+            if park():
+                print("Parked. Off we go.\n")
+                code = paint(job["id"])
+            else:
+                print("\nParking did not finish. Something else may be holding the")
+                print("arm: the Kortex web app open in a browser, a gamepad, or")
+                print("admittance mode from the wrist button.")
+
+        if code != 0:
             # Stay put rather than exit. As a service, exiting just means a
             # restart loop; waiting means a person can fix the arm and click.
             print("\nJob #{} did not finish. It stays in the queue.".format(job["id"]))
-            print("Most often the arm is simply not parked at Home. To park it:")
-            print("  KINOVA_TARGET=Home KINOVA_CONFIRM=yes"
-                  " ~/kinova-py310/bin/python ~/kinova/goto_pose.py")
-            print("Then click to try again.")
+            print("The reason is above. Click to try it again.")
             notify.beep()
             notify.wait_for_click()
             continue
