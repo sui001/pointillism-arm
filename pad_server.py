@@ -19,9 +19,10 @@ arm positions and the pad is on a public URL. It is read from SETUP_PASSWORD or
 from setup_password.txt beside this file, and neither is ever committed. With no
 password set, the setup page is refused outright rather than left open.
 
-    GET  /api/jobs        queue summary, oldest (next to paint) first
+    GET  /api/jobs        queue summary, oldest (next to paint) first, done ones gone
     POST /api/jobs        submit {dabs, thumb}; queued as 2 copies
     GET  /api/jobs/<id>   full job, for paint_sim.py
+    POST /api/jobs/<id>/done   painted and collected, drop it from the queue
     GET  /api/layout      where the sheets, pots, brushes and no-go zones are
     PUT  /api/layout      save that, from setup.html
 
@@ -233,7 +234,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/jobs":
             with _lock:
-                jobs = [summary(j, i < THUMBS_SHOWN) for i, j in enumerate(_jobs)]
+                waiting = [j for j in _jobs if not j.get("done")]
+                jobs = [summary(j, i < THUMBS_SHOWN) for i, j in enumerate(waiting)]
             return self.send_json(200, {"jobs": jobs, "total": len(jobs)})
         if self.path == "/api/layout":
             with _lock:
@@ -308,10 +310,34 @@ class Handler(SimpleHTTPRequestHandler):
                 _run.update({"state": str(event or "done")[:20], "updated": now})
         return self.send_json(200, {"ok": True})
 
+    def mark_done(self, raw):
+        """Painted and collected. It leaves the queue but the file stays as the record."""
+        if not self.authorised():
+            return self.demand_password()
+        try:
+            jid = int(raw)
+        except ValueError:
+            return self.send_json(400, {"error": "job id must be a number"})
+        with _lock:
+            job = next((j for j in _jobs if j["id"] == jid), None)
+            if job is None:
+                return self.send_json(404, {"error": "no job {}".format(jid)})
+            job["done"] = True
+            job["done_at"] = time.time()
+            try:
+                save_job(job)
+            except OSError as e:
+                print("could not save job {}: {}".format(jid, e), flush=True)
+            waiting = sum(1 for j in _jobs if not j.get("done"))
+        return self.send_json(200, {"id": jid, "waiting": waiting})
+
     def do_POST(self):
         global _next_id
         if self.path == "/api/run":
             return self.post_run()
+        parts = self.path.strip("/").split("/")
+        if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "done":
+            return self.mark_done(parts[2])
         if self.path != "/api/jobs":
             return self.send_json(404, {"error": "unknown endpoint"})
         try:
@@ -320,7 +346,7 @@ class Handler(SimpleHTTPRequestHandler):
         except (ValueError, KeyError, TypeError) as e:
             return self.send_json(400, {"error": str(e) or "expected {dabs:[...], thumb}"})
         with _lock:
-            if len(_jobs) >= MAX_JOBS:
+            if sum(1 for j in _jobs if not j.get("done")) >= MAX_JOBS:
                 return self.send_json(429, {"error": "the queue is full"})
             job = {
                 "id": _next_id,

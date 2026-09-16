@@ -37,6 +37,8 @@ the blending.
 | `pointillism-pad.service` | systemd unit, so the Pi serves the pad from boot |
 | `pad_server.py` | Serves both pages, holds the queue on disk, stores the layout. Standard library only |
 | `paint_sim.py` | Walks a queued job through every arm movement, with no paint and no contact |
+| `run_queue.py` | Paints the whole queue, oldest first, pausing between jobs for someone to change the paper |
+| `notify.py` | Beeps a GPIO buzzer when a painting is done, and waits for a mouse click to start the next |
 | `kenv.py` | Reads arm credentials from `/etc/kinova.env` so they stay off the command line |
 
 Nothing about the rig is hardcoded. The sheets, the pots, the working sweep and the
