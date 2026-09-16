@@ -69,6 +69,8 @@ PASS = os.environ.get("KINOVA_PASS")
 JOB = os.environ.get("KINOVA_JOB", "latest").strip()
 MAX_DABS = int(os.environ.get("KINOVA_MAX_DABS", "0"))   # 0 means every dab
 SPEED = float(os.environ.get("KINOVA_SPEED", "0.18"))
+TRAVEL_SPEED = float(os.environ.get("KINOVA_TRAVEL_SPEED", "0.35"))
+TRAVEL_OVER = float(os.environ.get("KINOVA_TRAVEL_OVER", "0.05"))
 BATCH = int(os.environ.get("KINOVA_BATCH", "15"))
 HOVER_Z = float(os.environ.get("KINOVA_HOVER", "0.20"))
 DIP = float(os.environ.get("KINOVA_DIP", "0.04"))
@@ -90,6 +92,8 @@ MOVE_TIMEOUT = 30
 
 if not USER or not PASS:
     sys.exit("Set KINOVA_USER and KINOVA_PASS, or fill /etc/kinova.env.")
+if not (0 < TRAVEL_SPEED <= 0.40):
+    sys.exit("Refusing: KINOVA_TRAVEL_SPEED must be within 0-0.40 m/s.")
 if not (0 < SPEED <= 0.30):
     # The arm's own hard limit is 0.5 m/s. This is a lower bound we choose,
     # because dabs 7 mm apart never reach the set speed anyway: the arm spends
@@ -319,12 +323,19 @@ def check(moves, layout, start=None):
     return bad
 
 
+def speed_for(distance):
+    """Long hops get the fast speed. A dab 7 mm from the last one would never
+    reach it anyway, and crawling the dab itself is what keeps it controlled."""
+    return TRAVEL_SPEED if distance > TRAVEL_OVER else SPEED
+
+
 def estimate(moves, start):
     total, prev = 0.0, start
     for _, x, y, z, dwell in moves:
-        total += math.dist(prev, (x, y, z)) / SPEED + 0.6 + dwell
+        gap = math.dist(prev, (x, y, z))
+        total += gap / speed_for(gap) + 0.6 + dwell
         prev = (x, y, z)
-    return total + math.dist(prev, start) / SPEED
+    return total + math.dist(prev, start) / TRAVEL_SPEED
 
 
 job = load_job()
@@ -343,8 +354,9 @@ print("copies    : {}".format(", ".join(c["slot"] for c in job["copies"])))
 print("brushes   : one per colour, standing in its own pot")
 print("gripper   : pretend, {:.1f}s per pick up and put down, {:.1f}s per reload, {:.2f}s per dab".format(
     GRIP_DWELL, LOAD_DWELL, DAB_DWELL))
-print("moves     : {}   speed {:.2f} m/s   hover {:.0f} mm, down to {:.0f} mm".format(
-    len(moves), SPEED, HOVER_Z * 1000, (HOVER_Z - DIP) * 1000))
+print("moves     : {}   {:.0f} mm/s over {:.0f} mm, else {:.0f} mm/s   hover {:.0f} mm, down to {:.0f} mm".format(
+    len(moves), TRAVEL_SPEED * 1000, TRAVEL_OVER * 1000, SPEED * 1000,
+    HOVER_Z * 1000, (HOVER_Z - DIP) * 1000))
 print("layout    : sheets {} and {}, pots {}".format(
     layout["sheets"]["display"], layout["sheets"]["keepsake"], layout["pots"]))
 print("limits    : sweep {:.0f} to {:.0f} deg, {} no-go box(es), reach {:.2f}-{:.2f} m".format(
@@ -393,11 +405,11 @@ def angdiff(a, b):
     return abs(((a - b + 180.0) % 360.0) - 180.0)
 
 
-def reach_pose(x, y, z, theta, name):
+def reach_pose(x, y, z, theta, name, speed=None):
     act = Base_pb2.Action()
     act.name = name
     pose = act.reach_pose
-    pose.constraint.speed.translation = SPEED
+    pose.constraint.speed.translation = speed or SPEED
     pose.constraint.speed.orientation = 30.0
     t = pose.target_pose
     t.x, t.y, t.z = x, y, z
@@ -478,10 +490,11 @@ try:
     prev = start
     t0 = time.time()
     for i, (label, x, y, z, dwell) in enumerate(moves, 1):
-        if math.dist(prev, (x, y, z)) >= 0.001:
+        gap = math.dist(prev, (x, y, z))
+        if gap >= 0.001:
             print("  [{:>6.1f}s] {:>3}/{}  {}".format(time.time() - t0, i, len(moves), label))
             report({"event": "progress", "index": i, "label": label, "x": x, "y": y, "z": z})
-            reach_pose(x, y, z, DOWN, label)
+            reach_pose(x, y, z, DOWN, label, speed_for(gap))
             prev = (x, y, z)
         if dwell:
             time.sleep(dwell)
