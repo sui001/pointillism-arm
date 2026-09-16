@@ -30,7 +30,9 @@ and a bad place to begin Cartesian moves). It returns to where it started.
     KINOVA_JOB=latest KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/paint_sim.py
 
 KINOVA_JOB         job id from the pad queue, or 'latest'
-KINOVA_MAX_DABS    dabs to visit, evenly sampled from the job, default 12
+KINOVA_MAX_DABS    0, the default, paints every dab. Set it to a number to
+                   sample that many evenly across the drawing instead, which
+                   is for quick previews, not for real paintings.
 KINOVA_SPEED       m/s, default 0.11, capped at 0.15
 KINOVA_BATCH       dabs put on one sheet before swapping to the other, default 15
 KINOVA_HOVER       travel height in m above the base plane, default 0.20
@@ -64,8 +66,8 @@ kenv.load()
 USER = os.environ.get("KINOVA_USER")
 PASS = os.environ.get("KINOVA_PASS")
 JOB = os.environ.get("KINOVA_JOB", "latest").strip()
-MAX_DABS = int(os.environ.get("KINOVA_MAX_DABS", "12"))
-SPEED = float(os.environ.get("KINOVA_SPEED", "0.11"))
+MAX_DABS = int(os.environ.get("KINOVA_MAX_DABS", "0"))   # 0 means every dab
+SPEED = float(os.environ.get("KINOVA_SPEED", "0.15"))
 BATCH = int(os.environ.get("KINOVA_BATCH", "15"))
 HOVER_Z = float(os.environ.get("KINOVA_HOVER", "0.20"))
 DIP = float(os.environ.get("KINOVA_DIP", "0.04"))
@@ -89,8 +91,8 @@ if not USER or not PASS:
     sys.exit("Set KINOVA_USER and KINOVA_PASS, or fill /etc/kinova.env.")
 if not (0 < SPEED <= 0.15):
     sys.exit("Refusing: KINOVA_SPEED must be within 0-0.15 m/s.")
-if MAX_DABS < 1:
-    sys.exit("KINOVA_MAX_DABS must be at least 1.")
+if MAX_DABS < 0:
+    sys.exit("KINOVA_MAX_DABS cannot be negative. Use 0 for every dab.")
 if HOVER_Z - DIP < MIN_Z:
     sys.exit("Refusing: a dip would go below {:.2f} m. Raise KINOVA_HOVER or lower KINOVA_DIP.".format(MIN_Z))
 
@@ -163,7 +165,7 @@ def plan(job, layout):
     cols, rows = job["grid"]["cols"], job["grid"]["rows"]
     dabs = sorted((d for d in job["dabs"] if d["pigment"] in PIGMENT_ORDER),
                   key=lambda d: (PIGMENT_ORDER.index(d["pigment"]), d["row"], d["col"]))
-    picked = sample(dabs, MAX_DABS)
+    picked = sample(dabs, MAX_DABS) if MAX_DABS else list(dabs)
     moves = []
 
     def touch(label, point, dwell):
@@ -330,7 +332,9 @@ for d in picked:
         colours.append(d["pigment"])
 
 print("job       : #{} from the pad, {} dabs drawn".format(job["id"], job["dab_count"]))
-print("visiting  : {} dabs in {} colour(s): {}".format(len(picked), len(colours), ", ".join(colours)))
+print("visiting  : {} dabs{} in {} colour(s): {}".format(
+    len(picked), "" if not MAX_DABS else " sampled from {}".format(job["dab_count"]),
+    len(colours), ", ".join(colours)))
 print("copies    : {}".format(", ".join(c["slot"] for c in job["copies"])))
 print("brushes   : one per colour, standing in its own pot")
 print("gripper   : pretend, {:.1f}s per pick up and put down, {:.1f}s per reload, {:.2f}s per dab".format(
@@ -440,6 +444,10 @@ try:
         print("routing   : {} swing(s) added to keep clear of the base\n".format(swings))
 
     for i, (label, x, y, z, dwell) in enumerate(moves, 1):
+        if len(moves) > 25 and 15 < i <= len(moves) - 5:
+            if i == 16:
+                print("  ... {} more moves ...".format(len(moves) - 20))
+            continue
         print("  {:>3}  {:<44} x={:+.3f} y={:+.3f} z={:+.3f}{}".format(
             i, label, x, y, z, "  wait {:.1f}s".format(dwell) if dwell else ""))
     print("\nestimated run : {:.0f} s".format(estimate(moves, start)))
@@ -483,6 +491,10 @@ except KeyboardInterrupt:
         base.Stop()
         report({"event": "stopped"})
     print("\ninterrupted. Sent Stop().")
+    # Exit non-zero, or run_queue reads a half painted job as a finished one and
+    # drops it from the queue. That loses someone's drawing. SystemExit still
+    # runs the finally below, so the session closes properly on the way out.
+    sys.exit(130)
 finally:
     if handle is not None:
         try:

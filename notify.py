@@ -56,7 +56,11 @@ def beep(times=5, on=0.2, gap=0.15, hz=None):
     """
     try:
         from gpiozero import PWMOutputDevice
-    except Exception:
+    except Exception as e:
+        # Silence here once cost a whole run: the venv that drives the arm had no
+        # gpiozero, so every beep failed without a sound OR a word about it.
+        print("  NO BEEP: cannot import gpiozero ({}). Install it into the python "
+              "running this, not just the system one.".format(e))
         return False
     try:
         buzzer = PWMOutputDevice(BUZZER_PIN, frequency=hz or BUZZER_HZ, initial_value=0)
@@ -96,6 +100,22 @@ def open_inputs():
     return handles
 
 
+def drain(handles):
+    """Throw away anything already queued on these devices.
+
+    Without this, a click made before the wait began can satisfy it the instant
+    it starts, which is not consent: the click has to happen while the machine
+    is asking, not at some point beforehand.
+    """
+    for fd in handles:
+        while True:
+            try:
+                if not os.read(fd, EVENT_SIZE * 64):
+                    break
+            except OSError:
+                break
+
+
 def wait_for_click(timeout=None):
     """Block until someone left clicks a mouse. False if the timeout ran out."""
     deadline = None if timeout is None else time.time() + timeout
@@ -104,6 +124,7 @@ def wait_for_click(timeout=None):
         if not handles:
             time.sleep(1.0)
             continue
+        drain(handles)
         try:
             until = time.time() + RESCAN_EVERY
             while time.time() < until:
