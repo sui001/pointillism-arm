@@ -1,39 +1,42 @@
 #!/usr/bin/env python3
-"""Show the arm's kinematic soft limits, and set the ones a painting actually uses.
+"""Show the arm's kinematic soft limits, and set the ones it will let you set.
 
-A soft limit belongs to one control mode, which makes it easy to get half done: a
-limit set on ANGULAR_TRAJECTORY does nothing to a Cartesian move. `paint_sim.py`
-drives every move through `reach_pose`, which is CARTESIAN_TRAJECTORY, so that is
-the mode whose limits decide how a painting feels.
+A soft limit belongs to one control mode, which makes it easy to reason about the
+wrong one. `paint_sim.py` drives every move through `reach_pose`, which runs as
+CARTESIAN_TRAJECTORY, so that is the mode whose limits decide how a painting
+behaves. A limit set on ANGULAR_TRAJECTORY says nothing about it.
 
-Why this exists: none of the Cartesian modes had an acceleration soft limit, so
-they fell back to the hard ceiling near 298 deg/s on the big joints. Hops between
-dabs never reach travel speed, so they never noticed. The long run across to the
-far sheet does reach it, then sheds all of it in about an eighth of a second,
-which looks and sounds like the arm being slapped to a halt. Giving those modes
-the acceleration ANGULAR_TRAJECTORY already uses lets the same move ease into its
-stop instead.
+What this arm actually accepts, found by writing each limit back to its own value
+and seeing which calls were refused:
 
-What this deliberately does NOT touch: the twist limits. CARTESIAN_TRAJECTORY has
-no angular one, so it uses the hard ceiling, and `reach_pose` asks for 30 deg/s of
-its own. The other Cartesian modes carry 20. Matching them would look tidier and
-would slow the cross sheet move down, because that move turns the tool about 46
-degrees and the orientation constraint is already close to binding. Tidiness is
-not worth a slower painting, so they are left alone.
+    mode                    acceleration   joint speed
+    ANGULAR_TRAJECTORY      yes            yes
+    ANGULAR_JOYSTICK        yes            yes
+    CARTESIAN_TRAJECTORY    NO             yes
+    CARTESIAN_JOYSTICK      NO             yes
 
-    # look, change nothing:
+So the empty acceleration list the Cartesian modes report is not a gap waiting to
+be filled. Those modes have no joint acceleration soft limit to set, and asking
+gives ERROR_DEVICE / METHOD_FAILED. Cartesian acceleration comes from the hard
+limits and is not ours to choose. This is worth writing down because the reading
+is not obvious: "empty" looks exactly like "nobody set it yet".
+
+The lever that does exist for painting is the joint speed limit. A move that needs
+a joint to turn faster than it allows is refused outright, which is what stops a
+dab near the far corner of the display sheet: the arm can reach that pose slowly
+but the configuration change it requires is too fast at painting speed.
+
+    # report everything, change nothing:
     ~/kinova-py310/bin/python ~/kinova/soft_limits.py
-    # apply everything listed as a change:
-    KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/soft_limits.py
+    # raise the Cartesian trajectory joint speed limit:
+    KINOVA_JOINT_SPEED=70 KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/soft_limits.py
 
-It refuses to write unless the arm is idle, so it can never rewrite limits out
-from under a painting. Re-running it when nothing differs is a no-op, so it is
-safe to leave in a checklist.
+It refuses to write unless the arm is idle, so it cannot change limits out from
+under a painting.
 
-KINOVA_ACCEL_BASE   deg/s for joints 0-2, default 51.57, which is 0.9 rad/s
-KINOVA_ACCEL_WRIST  deg/s for joints 3-5, default 515.66, which is 9.0 rad/s
-                    Both default to what ANGULAR_TRAJECTORY already carries, so
-                    every trajectory mode agrees unless you say otherwise.
+KINOVA_JOINT_SPEED  deg/s for all six joints under CARTESIAN_TRAJECTORY. Leave it
+                    unset to report and change nothing. Capped by the arm's own
+                    hard limit, which it prints.
 """
 import os
 import sys
@@ -53,19 +56,14 @@ kenv.load()
 USER = os.environ.get("KINOVA_USER")
 PASS = os.environ.get("KINOVA_PASS")
 ARMED = os.environ.get("KINOVA_CONFIRM") == "yes"
-ACCEL_BASE = float(os.environ.get("KINOVA_ACCEL_BASE", "51.5661964416504"))
-ACCEL_WRIST = float(os.environ.get("KINOVA_ACCEL_WRIST", "515.661987304688"))
+JOINT_SPEED = os.environ.get("KINOVA_JOINT_SPEED")
 
 if not USER or not PASS:
     sys.exit("Set KINOVA_USER and KINOVA_PASS, or fill /etc/kinova.env.")
 
-# Every mode a Cartesian move can run under. CARTESIAN_TRAJECTORY is the one
-# painting uses; the other two are here so that jogging the arm by hand and any
-# future waypoint work stop the same way, rather than surprising whoever meets
-# them next.
-WANTED = ("CARTESIAN_TRAJECTORY", "CARTESIAN_JOYSTICK", "CARTESIAN_WAYPOINT_TRAJECTORY")
+SHOW = ("ANGULAR_JOYSTICK", "ANGULAR_TRAJECTORY", "CARTESIAN_TRAJECTORY",
+        "CARTESIAN_JOYSTICK", "CARTESIAN_WAYPOINT_TRAJECTORY")
 PAINTS_WITH = "CARTESIAN_TRAJECTORY"
-SHOW = ("ANGULAR_JOYSTICK", "ANGULAR_TRAJECTORY") + WANTED
 
 transport = TCPTransport()
 router = RouterClient(transport, RouterClient.basicErrorCallback)
@@ -86,32 +84,18 @@ def mode_of(name):
     return m
 
 
-def accel_of(cc, name):
-    return list(cc.GetKinematicSoftLimits(mode_of(name)).joint_acceleration_limits)
-
-
 def fmt(values):
-    return " ".join("{:.1f}".format(v) for v in values) if values else "unset"
-
-
-def stopping(accel_deg, speed=0.35, radius=0.54):
-    """Roughly how long the arm takes to shed travel speed at a joint acceleration.
-
-    Deliberately rough. The point is the ratio between two settings, not a promise
-    about any particular move.
-    """
-    return speed / ((accel_deg * 3.14159265 / 180.0) * radius)
+    return " ".join("{:.1f}".format(v) for v in values) if values else "none"
 
 
 try:
     base = BaseClient(router)
     cc = ControlConfigClient(router)
     hard = cc.GetKinematicHardLimits()
-    ceiling = list(hard.joint_acceleration_limits)
-    want = [ACCEL_BASE] * 3 + [ACCEL_WRIST] * 3
 
-    print("hard ceiling : twist_lin {:.2f} m/s   accel {}\n".format(
-        hard.twist_linear, fmt(ceiling)))
+    print("hard ceiling: twist_lin {:.2f} m/s   speed {}   accel {}\n".format(
+        hard.twist_linear, fmt(hard.joint_speed_limits),
+        fmt(hard.joint_acceleration_limits)))
 
     print("soft limits now:")
     for name in SHOW:
@@ -121,40 +105,37 @@ try:
             print("  {:<31} could not read ({})".format(name, e))
             continue
         accel = list(soft.joint_acceleration_limits)
-        print("  {:<31} twist_lin {:>5}   accel {}".format(
+        print("  {:<31} twist_lin {:>5}   speed {:>5}   accel {}".format(
             name,
             "{:.2f}".format(soft.twist_linear) if soft.twist_linear else "unset",
-            fmt(accel) if accel else "unset, so {} applies".format(fmt(ceiling))))
+            "{:.1f}".format(soft.joint_speed_limits[0])
+            if soft.joint_speed_limits else "none",
+            fmt(accel) if accel else "not settable on this mode"))
 
-    changes = []
-    for name in WANTED:
-        before = accel_of(cc, name)
-        if [round(v, 1) for v in before] != [round(v, 1) for v in want]:
-            changes.append((name, before))
-
-    print("\nqueued changes: {}".format(len(changes)))
-    for name, before in changes:
-        print("  {:<31} {}  ->  {}".format(
-            name, before and fmt(before) or "unset", fmt(want)))
-    if not changes:
-        print("  none, the arm already matches what this file asks for.")
+    if JOINT_SPEED is None:
+        print("\nNothing asked for. Set KINOVA_JOINT_SPEED to change the joint speed")
+        print("limit for {}, which is the one painting runs under.".format(PAINTS_WITH))
         raise SystemExit(0)
 
-    was = next((b[0] for n, b in changes if n == PAINTS_WITH and b), ceiling[0])
-    print("\nFor {}, shedding 0.35 m/s goes from about {:.2f}s to {:.2f}s.".format(
-        PAINTS_WITH, stopping(was), stopping(ACCEL_BASE)))
-    print("That is the difference between stopping dead and easing in. It costs")
-    print("roughly {:.1f}s on each long travel and nothing on the dab hops,".format(
-        2 * (stopping(ACCEL_BASE) - stopping(was))))
-    print("which never get fast enough to care.")
+    want = float(JOINT_SPEED)
+    ceiling = min(hard.joint_speed_limits)
+    if not 0 < want <= ceiling:
+        raise SystemExit(
+            "Refusing: {:.1f} deg/s is outside the arm's own limit of {:.1f}."
+            .format(want, ceiling))
+
+    before = list(cc.GetKinematicSoftLimits(mode_of(PAINTS_WITH)).joint_speed_limits)
+    print("\nplan    : {} joint speed {} -> {:.1f} on all six".format(
+        PAINTS_WITH, fmt(before), want))
+    print("The arm refuses any move needing a joint faster than this, so raising it")
+    print("lets through configuration changes it currently rejects. It does not make")
+    print("the painting faster: the Cartesian speed still governs that.")
 
     if not ARMED:
         print("\nDRY RUN. Nothing changed. Re-run with KINOVA_CONFIRM=yes.")
         raise SystemExit(0)
 
-    # Never rewrite limits out from under a painting. The arm is mid trajectory
-    # for most of a run, and a config write is not worth finding out about the
-    # hard way.
+    # Never rewrite limits out from under a painting.
     state = base.GetArmState().active_state
     if state != Base_pb2.ARMSTATE_SERVOING_READY:
         raise SystemExit(
@@ -162,17 +143,16 @@ try:
             "most likely a painting in progress. Let it finish, then run this."
             .format(Base_pb2.ArmState.Name(state)))
 
-    print("")
-    for name, _ in changes:
-        limits = ControlConfig_pb2.JointAccelerationSoftLimits()
-        limits.control_mode = getattr(ControlConfig_pb2, name)
-        for value in want:
-            limits.joint_acceleration_soft_limits.append(value)
-        cc.SetJointAccelerationSoftLimits(limits)
-        after = accel_of(cc, name)
-        ok = [round(v, 1) for v in after] == [round(v, 1) for v in want]
-        print("  {:<31} now {}   {}".format(
-            name, fmt(after), "ok" if ok else "DOES NOT MATCH, check the arm"))
+    limits = ControlConfig_pb2.JointSpeedSoftLimits()
+    limits.control_mode = getattr(ControlConfig_pb2, PAINTS_WITH)
+    for _ in range(len(hard.joint_speed_limits)):
+        limits.joint_speed_soft_limits.append(want)
+    cc.SetJointSpeedSoftLimits(limits)
+
+    after = list(cc.GetKinematicSoftLimits(mode_of(PAINTS_WITH)).joint_speed_limits)
+    print("\nnow     : {}   {}".format(
+        fmt(after),
+        "ok" if after and abs(after[0] - want) < 0.1 else "DID NOT TAKE, check the arm"))
 finally:
     try:
         session.CloseSession()
