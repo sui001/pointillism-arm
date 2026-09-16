@@ -42,6 +42,10 @@ KINOVA_GRIP_DWELL  pretend gripper time in s per pick up or put down, default 1.
 KINOVA_DABS_PER_DIP  dabs put down before going back for more paint, default 10.
                    A guess until there is a real brush to watch run dry.
 KINOVA_PAD_URL     default http://127.0.0.1:8010
+
+Exit codes: 0 painted, 75 the arm was busy and the same job is worth handing
+back in a moment, 130 stopped by hand. Anything else is a refusal that will
+stand until someone changes something, so run_queue.py does not retry it.
 """
 import base64
 import json
@@ -89,6 +93,7 @@ MIN_REACH, MAX_REACH = 0.25, 0.80
 SAMPLES = 24                # points checked along each straight move
 HOME_TOL = 5.0              # deg per joint
 MOVE_TIMEOUT = 30
+BUSY_EXIT = 75              # "ask again in a moment", the one exit worth a retry
 
 if not USER or not PASS:
     sys.exit("Set KINOVA_USER and KINOVA_PASS, or fill /etc/kinova.env.")
@@ -434,7 +439,11 @@ try:
         busy = ("Arm is {}, not SERVOING_READY. Something else is driving it, or a "
                 "session just closed; wait a few seconds.".format(Base_pb2.ArmState.Name(state)))
         if ARMED:
-            raise SystemExit(busy + " Aborting.")
+            # The only failure here that a retry can clear, so it gets its own
+            # exit code. Everything else this script refuses is a standing
+            # condition, and run_queue.py needs to tell the two apart.
+            print(busy + " Aborting.", file=sys.stderr)
+            raise SystemExit(BUSY_EXIT)
         print("NOTE: " + busy + "\n")
     fb = cyclic.RefreshFeedback()
     if fb.base.fault_bank_a or fb.base.fault_bank_b:

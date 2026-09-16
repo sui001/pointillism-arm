@@ -42,6 +42,7 @@ ARMED = os.environ.get("KINOVA_CONFIRM") == "yes"
 SIM = os.path.join(HERE, "paint_sim.py")
 RETRY_PAUSE = 12
 IDLE_POLL = 5
+BUSY_EXIT = 75          # paint_sim's "the arm is busy", and it must match there
 
 
 def studio_password():
@@ -78,15 +79,25 @@ def mark_done(job_id):
 
 
 def paint(job_id):
-    """Hand one job to paint_sim. It refuses safely, so a bounce is worth retrying."""
+    """Hand one job to paint_sim. A busy arm is worth another go, a refusal is not."""
     env = os.environ.copy()
     env["KINOVA_JOB"] = str(job_id)
     for attempt in range(1, ATTEMPTS + 1):
         if attempt > 1:
             print("\n  attempt {} of {}".format(attempt, ATTEMPTS))
-        if subprocess.run([sys.executable, SIM], env=env).returncode == 0:
+        code = subprocess.run([sys.executable, SIM], env=env).returncode
+        if code == 0:
             return True
+        if code != BUSY_EXIT:
+            # Three silent goes at a standing refusal look, from the room,
+            # exactly like a dead mouse: you click, nothing moves, it beeps
+            # again half a minute later. The click was fine every time. Say
+            # what happened instead of quietly trying it twice more.
+            print("\n  paint_sim refused, and trying again cannot clear that.")
+            print("  Its reason is the line just above.")
+            return False
         if attempt < ATTEMPTS:
+            print("  the arm was still busy, another go in {}s".format(RETRY_PAUSE))
             time.sleep(RETRY_PAUSE)
     return False
 
@@ -136,9 +147,11 @@ def main():
         if not paint(job["id"]):
             # Stay put rather than exit. As a service, exiting just means a
             # restart loop; waiting means a person can fix the arm and click.
-            print("\nJob #{} did not finish after {} attempts. It stays in the queue.".format(
-                job["id"], ATTEMPTS))
-            print("Check the arm, it may need parking at Home. Click to try again.")
+            print("\nJob #{} did not finish. It stays in the queue.".format(job["id"]))
+            print("Most often the arm is simply not parked at Home. To park it:")
+            print("  KINOVA_TARGET=Home KINOVA_CONFIRM=yes"
+                  " ~/kinova-py310/bin/python ~/kinova/goto_pose.py")
+            print("Then click to try again.")
             notify.beep()
             notify.wait_for_click()
             continue
