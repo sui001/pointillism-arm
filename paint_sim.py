@@ -33,7 +33,8 @@ KINOVA_JOB         job id from the pad queue, or 'latest'
 KINOVA_MAX_DABS    0, the default, paints every dab. Set it to a number to
                    sample that many evenly across the drawing instead, which
                    is for quick previews, not for real paintings.
-KINOVA_SPEED       m/s, default 0.11, capped at 0.15
+KINOVA_SPEED       m/s, default 0.18, capped here at 0.30. The arm's own hard
+                   limit is 0.50, reported by GetKinematicHardLimits.
 KINOVA_BATCH       dabs put on one sheet before swapping to the other, default 15
 KINOVA_HOVER       travel height in m above the base plane, default 0.20
 KINOVA_DIP         dip depth in m, default 0.04
@@ -67,7 +68,7 @@ USER = os.environ.get("KINOVA_USER")
 PASS = os.environ.get("KINOVA_PASS")
 JOB = os.environ.get("KINOVA_JOB", "latest").strip()
 MAX_DABS = int(os.environ.get("KINOVA_MAX_DABS", "0"))   # 0 means every dab
-SPEED = float(os.environ.get("KINOVA_SPEED", "0.15"))
+SPEED = float(os.environ.get("KINOVA_SPEED", "0.18"))
 BATCH = int(os.environ.get("KINOVA_BATCH", "15"))
 HOVER_Z = float(os.environ.get("KINOVA_HOVER", "0.20"))
 DIP = float(os.environ.get("KINOVA_DIP", "0.04"))
@@ -89,8 +90,11 @@ MOVE_TIMEOUT = 30
 
 if not USER or not PASS:
     sys.exit("Set KINOVA_USER and KINOVA_PASS, or fill /etc/kinova.env.")
-if not (0 < SPEED <= 0.15):
-    sys.exit("Refusing: KINOVA_SPEED must be within 0-0.15 m/s.")
+if not (0 < SPEED <= 0.30):
+    # The arm's own hard limit is 0.5 m/s. This is a lower bound we choose,
+    # because dabs 7 mm apart never reach the set speed anyway: the arm spends
+    # those hops accelerating and braking. Raise it knowingly, not by habit.
+    sys.exit("Refusing: KINOVA_SPEED must be within 0-0.30 m/s.")
 if MAX_DABS < 0:
     sys.exit("KINOVA_MAX_DABS cannot be negative. Use 0 for every dab.")
 if HOVER_Z - DIP < MIN_Z:
