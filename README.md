@@ -42,6 +42,7 @@ the blending.
 | `goto_pose.py` | Parks the arm at a factory pose, Home nearly always. What the queue tells you to run when it refuses to start |
 | `jog_joint.py` | Moves one joint at a time, for recovering from a pose that a whole-pose move should not be trusted with |
 | `soft_limits.py` | Shows the arm's kinematic soft limits and sets the ones a painting uses. Will not write while the arm is moving |
+| `teach.py` | Records where the paper and pots actually are, by having you push the arm onto the corners. Commands no motion |
 | `notify.py` | Beeps a GPIO buzzer when a painting is done, and waits for a mouse click to start the next |
 | `kenv.py` | Reads arm credentials from `/etc/kinova.env` so they stay off the command line |
 
@@ -83,6 +84,39 @@ moves one joint at a time instead, which is predictable:
 KINOVA_JOINT=3 KINOVA_ANGLE=0 KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/jog_joint.py
 ```
 
+## Setting it up by teaching
+
+Dragging rectangles on the setup page records where you *believe* the paper is, and
+the arm finds out the truth later and at the worst moment. Teaching turns that round:
+you push the arm onto the corners and it writes down where they actually were. A
+corner read off the arm's own joints is reachable by definition, because reading it
+meant having the arm there.
+
+Press the wrist button so the arm goes compliant, then put the brush tip where it
+belongs and click. It commands no motion at any point, which is what makes it the safe
+way to work close to the machine.
+
+```sh
+# three corners of a sheet, nothing saved:
+KINOVA_TEACH=display ~/kinova-py310/bin/python ~/kinova/teach.py
+# same again, and keep it:
+KINOVA_TEACH=display KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/teach.py
+# the pot block wants the first and last pot:
+KINOVA_TEACH=pots KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/teach.py
+```
+
+Right click captures a corner, middle click scraps it and asks again. The corners are
+named as they appear on the visitor's pad: top left is row 0 column 0.
+
+It measures more than it can save. `layout.json` holds position and a rotation of 0 or
+90, and has no height at all, so paper height and tilt are reported for you rather than
+stored, and a sheet more than a degree or so off square is refused instead of being
+rounded to square. At a 7 mm dab pitch you want the paper actually straight, and one
+degree across a sheet is 5 mm at the far corner.
+
+`notify.py buttons` names each button you press, which is the way to check a mouse
+reports all three before you rely on it.
+
 ## When a painting stops
 
 A job stops rather than guesses, so a stop is normal and recoverable. The runner
@@ -103,10 +137,13 @@ The last few lines say which move stopped it and why. Three things turn up:
 | `Arm aborted '<move>'` with a `reason:` | The arm refused that position | Read the reason and the reach it prints |
 | `not SERVOING_READY` | Something else holds the arm | See below |
 
-**Something else holds the arm.** The arm reports `MANUALLY_CONTROLLED` when the
-Kortex web app has it, a gamepad is plugged into the base, or the wrist button put
-it in admittance mode. Close or unplug whichever it is. That page lives on the
-arm's own wired network, so only the Pi can reach it, not a laptop on wifi.
+**Something else holds the arm.** Usually nothing does. The arm reports
+`MANUALLY_CONTROLLED` for a few seconds after *any* script closes its session, which
+is exactly when you are most likely to run the next one, so the scripts here wait it
+out rather than believing it. If it persists, then something really does hold the arm:
+the Kortex web app, a gamepad in the base, or the wrist button having put it in
+admittance mode. Close or unplug whichever it is. The Kortex page lives on the arm's
+own wired network, so only the Pi can reach it, never a laptop on wifi.
 
 **Park it by hand**, if you ever need to without the runner:
 

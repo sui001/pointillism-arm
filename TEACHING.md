@@ -80,14 +80,35 @@ Flow per sheet:
 Nothing is written until the whole sheet is taught and agreed. A half-taught sheet
 must leave the old layout alone.
 
-## Pieces to build
+## Pieces, and what building it actually took
 
-| Piece | Work |
+Built on 2026-09-16, and two of the four planned pieces turned out to be unnecessary.
+
+| Piece | State |
 |---|---|
-| `notify.py` | `BTN_RIGHT` is 0x111 and `BTN_MIDDLE` 0x112, beside the `BTN_LEFT` 0x110 it already watches. Generalise `wait_for_click` to take which button, keep the drain so a click made before the machine asked cannot answer for you |
-| `teach.py` | Owns the arm. Waits for the arm to be free, reads the tool pose on each capture, solves the frame from three points, reports squareness. Refuses to write a frame whose corners fall outside the reach band, because that would re-import the bug this is meant to kill |
-| `pad_server.py` | A teach session: start, capture, cancel, commit. Behind the studio password like the rest of setup. State in memory is fine, it dies with the session by design |
-| `setup.html` | A teach panel per sheet: which corner is wanted, what has been captured, the derived frame, a commit button. The envelope shading added on 2026-09-16 already shows whether the result lands somewhere legal |
+| `notify.py` | **Done.** `wait_for_button` takes button names; left, right and middle all read. `wait_for_click` still wraps it so `run_queue` is untouched. `notify.py buttons` names what you press, for checking a mouse before setup day |
+| `teach.py` | **Done.** Three corners for a sheet, two pots for the block. Commands no motion at all. Refuses while a job is painting, refuses a frame whose corners fall outside the reach band, and refuses a sheet too far off square to be stored honestly. The frame maths is round-tripped against `paint_sim`'s own `place()` in a test, because a sign error there would paint a valid plan in the wrong place and say nothing |
+| `pad_server.py` | **Not needed.** Teaching writes through the existing `PUT /api/layout`, which already validates and writes atomically. A teach-session API would have been a second way to do something that already worked |
+| `setup.html` | **Not needed to work.** The page renders whatever the layout says, so a taught sheet shows up on it already. A live panel during the teach would be nicer, and is the obvious next increment, but the terminal is fine for a setup task |
+
+Teaching runs from a terminal on the Pi. That is a deliberate difference from the
+show-time rule that staff should only ever need to plug in and click: setup is not a
+show, and someone teaching corners already has their hands on the machine.
+
+## What it measures but cannot save
+
+`layout.json` holds `x`, `y` and a `rot` of 0 or 90 per item, and has no `z` at all.
+So:
+
+- **Position is saved.** That is the point.
+- **Rotation is saved only if it is close to square.** More than about a degree off and
+  it refuses, rather than rounding a skew away that would be 5 mm at the far corner.
+  Square the paper by hand instead; at a 7 mm pitch that is the right answer anyway.
+- **Height and tilt are reported, not stored.** Nothing uses them yet, because the
+  gripper is away and `HOVER_Z` comes from the environment rather than the layout. When
+  a brush actually touches paper, add `z` to `placed()` in `pad_server.py` and have
+  `paint_sim` prefer it over the env default. Do not add the field before something
+  reads it.
 
 ## Safety, which is the whole risk here
 

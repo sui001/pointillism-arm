@@ -29,11 +29,17 @@ next to it. Nothing here is a simulation despite `paint_sim.py`'s name.
    the table, which was established by writing each limit back to its own value and
    seeing which calls were refused.
 
-2. **`theta_z` is a dead lever.** `paint_sim` pins tool orientation to (180, 0, 90).
-   Changing `theta_z` moves joint 5 and nothing else: joints 0-4 stay identical across
-   a 106 degree swing. It is the final roll, coaxial with the tool, so it cannot
-   influence the arm's configuration. Do not propose it as a fix for reachability. A
-   dab is rotationally symmetric so the constraint costs nothing either.
+2. **`theta_z` is a dead lever, and there is no redundancy to find anywhere.**
+   `paint_sim` pins tool orientation to (180, 0, 90). Changing `theta_z` moves joint 5
+   and nothing else: joints 0-4 stay identical across a 106 degree swing, because on
+   six axes the tool roll *is* the last joint rather than a spare one.
+
+   The deeper point, which is the tempting wrong idea to avoid: a 6-DOF arm commanded
+   to a fully specified pose has **exactly zero redundancy**. There is no null space to
+   reconfigure through, which is why the arm cannot be argued out of a folded
+   configuration. A dab is rotationally symmetric so freeing `theta_z` costs nothing,
+   but it buys nothing either. `NULL_SPACE_ADMITTANCE` appears in the control mode enum
+   and has nothing to work with on this variant; it needs seven axes.
 
 3. **`MANUALLY_CONTROLLED` right after any script closes its session is a harmless
    transient**, lasting seconds. It is not the Kortex web app, not a gamepad, not the

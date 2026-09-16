@@ -25,8 +25,14 @@ is nothing to install, and the pi user is already in the input group. It does
 not care which event node the mouse lands on and it rescans while waiting, so
 unplugging and replugging mid show is fine.
 
+Left, right and middle are all readable. The queue only ever wants left, since
+one gesture is the whole interface during a show. Teaching wants right to
+capture a point and middle to scrap the last one, which is why
+`wait_for_button` takes names rather than assuming.
+
     python3 notify.py beep      # test the buzzer
     python3 notify.py wait      # blocks until you left click
+    python3 notify.py buttons   # names each button you press, to check a mouse
 
 KINOVA_BUZZER_PIN   BCM pin the buzzer sits on, default 18
 """
@@ -44,7 +50,7 @@ BUZZER_HZ = float(os.environ.get("KINOVA_BUZZER_HZ", "3000"))
 EVENT_FORMAT = "llHHi"
 EVENT_SIZE = struct.calcsize(EVENT_FORMAT)
 EV_KEY = 0x01
-BTN_LEFT = 0x110
+BUTTONS = {"left": 0x110, "right": 0x111, "middle": 0x112}
 RESCAN_EVERY = 5.0
 
 
@@ -116,8 +122,19 @@ def drain(handles):
                 break
 
 
-def wait_for_click(timeout=None):
-    """Block until someone left clicks a mouse. False if the timeout ran out."""
+def wait_for_button(names=("left",), timeout=None):
+    """Block until one of these mouse buttons is pressed. Its name, or None on timeout.
+
+    Teaching needs more than one button: one to capture a point and another to
+    scrap the last one. They arrive on the same devices, so watching for several
+    costs nothing over watching for one.
+    """
+    wanted = {}
+    for name in names:
+        if name not in BUTTONS:
+            raise ValueError("unknown button '{}', try {}".format(
+                name, ", ".join(sorted(BUTTONS))))
+        wanted[BUTTONS[name]] = name
     deadline = None if timeout is None else time.time() + timeout
     while deadline is None or time.time() < deadline:
         handles = open_inputs()
@@ -129,7 +146,7 @@ def wait_for_click(timeout=None):
             until = time.time() + RESCAN_EVERY
             while time.time() < until:
                 if deadline is not None and time.time() >= deadline:
-                    return False
+                    return None
                 ready, _, _ = select.select(list(handles), [], [], 0.5)
                 for fd in ready:
                     try:
@@ -139,15 +156,20 @@ def wait_for_click(timeout=None):
                     for at in range(0, len(data) - EVENT_SIZE + 1, EVENT_SIZE):
                         _, _, etype, code, value = struct.unpack(
                             EVENT_FORMAT, data[at:at + EVENT_SIZE])
-                        if etype == EV_KEY and code == BTN_LEFT and value == 1:
-                            return True
+                        if etype == EV_KEY and code in wanted and value == 1:
+                            return wanted[code]
         finally:
             for fd in handles:
                 try:
                     os.close(fd)
                 except OSError:
                     pass
-    return False
+    return None
+
+
+def wait_for_click(timeout=None):
+    """Block until someone left clicks a mouse. False if the timeout ran out."""
+    return wait_for_button(("left",), timeout) is not None
 
 
 if __name__ == "__main__":
@@ -170,5 +192,13 @@ if __name__ == "__main__":
             print("clicked" if wait_for_click() else "timed out")
         except KeyboardInterrupt:
             print("\ngave up")
+    elif what == "buttons":
+        print("press any mouse button to see it named, Ctrl-C to stop.")
+        print("this is the way to check a mouse reports all three before setup day.")
+        try:
+            while True:
+                print("  {}".format(wait_for_button(tuple(BUTTONS)) or "nothing"))
+        except KeyboardInterrupt:
+            print("\ndone")
     else:
         sys.exit(__doc__)
