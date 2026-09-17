@@ -42,6 +42,7 @@ USER = os.environ.get("KINOVA_USER")
 PASS = os.environ.get("KINOVA_PASS")
 TARGET = os.environ.get("KINOVA_TARGET", "").strip()
 SPEED = float(os.environ.get("KINOVA_SPEED", "5"))
+ABORT_EXIT = 77         # the arm refused the move, and the caller must not think it parked
 ARMED = os.environ.get("KINOVA_CONFIRM") == "yes"
 TIMEOUT = 180
 
@@ -221,8 +222,9 @@ try:
         base.Stop()
         raise SystemExit("\nTIMED OUT after {}s. Sent Stop(). Check the arm.".format(TIMEOUT))
 
+    aborted = result.get("event") == "ACTION_ABORT"
     print("\nresult    : {}".format(result.get("event")))
-    if result.get("event") == "ACTION_ABORT":
+    if aborted:
         why(result.get("notification"))
     fb = cyclic.RefreshFeedback()
     print("final     : {}".format(
@@ -231,6 +233,14 @@ try:
         fb.base.tool_pose_x, fb.base.tool_pose_y, fb.base.tool_pose_z))
     if fault_seen.is_set():
         print("NOTE: a fault was observed during the move. Inspect before continuing.")
+    if aborted:
+        # Exit non-zero, because callers believe exit codes. run_queue asks this
+        # script to park and then reads the code to decide whether it worked.
+        # Printing ACTION_ABORT and exiting 0 told it the arm was parked when the
+        # arm had not moved at all, so it announced "Parked. Off we go." and went
+        # straight back into a refusal. From the room that is a click, some beeps,
+        # and nothing, over and over, with the real reason scrolling past.
+        raise SystemExit(ABORT_EXIT)
 finally:
     stop_monitor.set()
     try:

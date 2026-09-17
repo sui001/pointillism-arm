@@ -155,6 +155,42 @@ KINOVA_TARGET=Home KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/goto_po
 and click. If the arm is somewhere a whole-pose move should not be trusted with,
 walk it back a joint at a time with `jog_joint.py` first.
 
+### When it will not move at all
+
+Work down this list and stop as soon as something works. Most stops never get past
+the first rung.
+
+1. **Click.** The runner offers to park at Home and does it.
+2. **Hand guide, then click.** Wrist button for admittance, lift the tool up and back
+   away from the cart, release, click. This also fixes the case where the arm is low
+   and a large move would sweep through a protection zone.
+3. **Park from a terminal.**
+   `KINOVA_TARGET=Home KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/goto_pose.py`
+4. **Power cycle the arm.**
+
+**The test for rung 4** is a deliberately tiny move. Read the current angle of any
+joint, ask for five degrees less, and watch what comes back:
+
+```sh
+KINOVA_JOINT=4 KINOVA_ANGLE=<current minus 5> KINOVA_CONFIRM=yes \
+    ~/kinova-py310/bin/python ~/kinova/jog_joint.py
+```
+
+`ACTION_ABORT` on a five degree move means the arm is refusing *everything*, and no
+amount of software will talk it round. On 2026-09-17 this state cost forty minutes
+before the power cycle that fixed it in one. Things that look like they should help
+and do not:
+
+- `base.ClearFaults()` does nothing for it.
+- `DeviceConfigClient.ClearAllSafetyStatus()` does nothing for it either.
+- The safety information is not worth reading. `GetAllSafetyInformation` reports every
+  entry as `SAFETY_STATUS_ERROR` even while the arm is painting perfectly, so it cannot
+  distinguish a healthy arm from a stuck one. It looks like a smoking gun and is not.
+
+What the arm reports in this state is the confusing part: `SERVOING_READY`, servoing
+mode normal, control mode `ANGULAR_TRAJECTORY`, zero faults on the base and on every
+actuator, and `METHOD_FAILED (1)` on any move it is asked to make.
+
 ## Running it
 
 It runs on a Raspberry Pi 5 sitting on the same wired network as the arm. The Pi

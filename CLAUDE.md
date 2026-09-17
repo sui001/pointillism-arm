@@ -102,6 +102,21 @@ changes because the wrist rides higher for the same contact point. Re-measure ra
 than assuming today's envelope carries over. `TEACHING.md` has the plan for registering
 paper properly, which is the thing to build next.
 
+## When the arm refuses every move
+
+There is a state where the arm reports `SERVOING_READY`, normal servoing, control mode
+`ANGULAR_TRAJECTORY`, zero faults on the base and every actuator, and then answers
+`METHOD_FAILED (1)` to any move at all, including a five degree jog from a high, clear
+pose. **Only a power cycle clears it.** Establish it with the five degree jog and then
+stop diagnosing: on 2026-09-17 that took forty minutes and the reset took one.
+
+Two dead ends worth not repeating, both tried and useless here: `base.ClearFaults()`
+and `DeviceConfigClient.ClearAllSafetyStatus()`.
+
+And one actively misleading instrument: `GetAllSafetyInformation` reports all eighteen
+entries as `SAFETY_STATUS_ERROR` **even while the arm is painting perfectly**. I read
+that as the smoking gun and it was noise. Do not build a diagnosis on it.
+
 ## Verify before you claim
 
 I misled the user twice today by reporting a background watcher's output without
