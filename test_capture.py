@@ -30,6 +30,7 @@ import pad_server as S
 
 JOBS = tempfile.mkdtemp(prefix="pad-test-jobs-")
 S.JOBS_DIR = JOBS
+S.LAYOUT_PATH = os.path.join(JOBS, "layout.json")
 S.load_jobs()
 
 server = ThreadingHTTPServer(("127.0.0.1", 0), S.Handler)
@@ -151,6 +152,23 @@ check("a decision nobody offered",
       call("/api/capture/decide", {"decision": "maybe"})[0], 400)
 check("an unknown step", call("/api/capture/sideways", {})[0], 404)
 call("/api/capture/decide", {"decision": "bin"})
+
+print("\nthe taught portrait pose survives the setup page")
+POSE = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+lay = call("/api/layout")[1]
+lay["portrait"] = {"pose": POSE, "target": [0.5, 0.42]}
+check("teaching it saves it",
+      call("/api/layout", lay, PASSWORD, method="PUT")[1]["portrait"]["pose"], POSE)
+# The setup page knows nothing about the portrait pose, so it sends a layout
+# without one. Dropping it there would silently un-teach the arm every time
+# somebody dragged a sheet, and the next visitor would be told to go and find
+# whoever can teach it.
+from_setup = {k: lay[k] for k in ("sheets", "pots", "sector", "nogo")}
+check("and a save from the setup page keeps it",
+      call("/api/layout", from_setup, PASSWORD, method="PUT")[1]["portrait"]["pose"], POSE)
+check("six angles or nothing",
+      call("/api/layout", dict(lay, portrait={"pose": [1, 2, 3]}), PASSWORD,
+           method="PUT")[0], 400)
 
 print("\na request nobody serves ages out")
 # Negative, not zero: the Windows clock is coarse enough that "since" and "now"

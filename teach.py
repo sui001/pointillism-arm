@@ -43,7 +43,14 @@ actually square, not square-ish and compensated for.
     KINOVA_TEACH=display ~/kinova-py310/bin/python ~/kinova/teach.py
     KINOVA_TEACH=display KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/teach.py
 
-KINOVA_TEACH     display, keepsake or pots
+The fourth thing to teach is where to look for a headshot, which is a pose
+rather than a place: push the arm until the camera is pointed at where somebody
+will stand, with a blank wall behind them, and capture. It stores six joint
+angles, and tells you whether a face actually lands in the frame from there.
+
+    KINOVA_TEACH=portrait KINOVA_CONFIRM=yes ~/kinova-py310/bin/python ~/kinova/teach.py
+
+KINOVA_TEACH     display, keepsake, pots or portrait
 KINOVA_CONFIRM   yes to write layout.json. Without it you get the numbers and
                  nothing is saved, which is the right way to try this once.
 KINOVA_SQUARE    degrees of rotation still counted as square, default 1.5
@@ -53,6 +60,7 @@ import json
 import math
 import os
 import sys
+import time
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -130,6 +138,11 @@ TARGET = os.environ.get("KINOVA_TEACH", "").strip().lower()
 ARMED = os.environ.get("KINOVA_CONFIRM") == "yes"
 SQUARE_TOL = float(os.environ.get("KINOVA_SQUARE", "1.5"))
 PAD = os.environ.get("KINOVA_PAD_URL", "http://127.0.0.1:8010")
+STREAM = os.environ.get("KINOVA_STREAM_URL", "http://127.0.0.1:8000")
+# Where a face belongs in the frame. Not a knob anybody should need, but the
+# one number a different room might argue with.
+TARGET_XY = (float(os.environ.get("KINOVA_FACE_X", "0.50")),
+             float(os.environ.get("KINOVA_FACE_Y", "0.42")))
 
 
 def fetch(path):
@@ -163,6 +176,52 @@ def save_layout(layout):
         return None
     except Exception as e:
         return str(e)
+
+
+def look(pose):
+    """What the camera sees from the pose being taught, in words.
+
+    Teaching a place to look and not being told whether a face lands in frame
+    would be teaching blind, and the failure would surface later as headshot
+    giving up on somebody who is standing exactly where they were told.
+
+    Nothing is saved and no image is written: this reads one frame, measures
+    it, and lets go of it, for the same reason headshot.py does.
+    """
+    lines = []
+    try:
+        import cv2
+        import numpy as np
+        with urllib.request.urlopen(STREAM + "/snapshot", timeout=5) as r:
+            raw = np.frombuffer(r.read(), dtype=np.uint8)
+        img = cv2.imdecode(raw, cv2.IMREAD_COLOR)
+    except Exception as e:
+        return {"lines": ["no camera to check with ({}).".format(e),
+                          "stream.py is what serves it, and only it may.",
+                          "the pose is still worth saving; check it later."]}
+    if img is None:
+        return {"lines": ["the snapshot did not decode. Check stream.py."]}
+
+    h, w = img.shape[:2]
+    lines.append("frame is {}x{}".format(w, h))
+    import headshot
+    face = headshot.find_face(img)
+    del img
+    if face is None:
+        lines.append("no face in shot. If somebody is standing there, the light")
+        lines.append("or the angle is wrong, and that is the thing to fix now")
+        lines.append("rather than when a visitor is waiting.")
+        return {"lines": lines}
+    fx, fy, fw, fh = face
+    lines.append("a face at {:.0%} across, {:.0%} down, {:.0%} of the frame wide"
+                 .format((fx + fw / 2.0) / w, (fy + fh / 2.0) / h, fw / float(w)))
+    if fw / float(w) > 0.30:
+        lines.append("that is big: they are close enough that the crop will be")
+        lines.append("tighter than everybody else's. Move the mark back.")
+    elif fw / float(w) < 0.08:
+        lines.append("that is small: a face that size has little to dither with.")
+        lines.append("Move the mark closer, or the arm nearer to it.")
+    return {"lines": lines}
 
 
 def bearing(x, y):
@@ -215,8 +274,8 @@ def main():
     password = os.environ.get("KINOVA_PASS")
     if not user or not password:
         sys.exit("Set KINOVA_USER and KINOVA_PASS, or fill /etc/kinova.env.")
-    if TARGET not in ("display", "keepsake", "pots"):
-        sys.exit("Set KINOVA_TEACH to display, keepsake or pots.")
+    if TARGET not in ("display", "keepsake", "pots", "portrait"):
+        sys.exit("Set KINOVA_TEACH to display, keepsake, pots or portrait.")
 
     transport = TCPTransport()
     router = RouterClient(transport, RouterClient.basicErrorCallback)
@@ -245,9 +304,27 @@ def main():
             point[0], point[1], point[2], math.hypot(point[0], point[1])))
         return point
 
-    def ask(prompt):
+    def capture_joints(prompt):
+        """Same again, but reads the six joint angles rather than the tool pose.
+
+        The portrait pose is stored as joints because that is what makes it
+        reachable by construction, and because it is an aim rather than a
+        place: what matters is where the camera is looking, not where the tool
+        tip happens to be.
+        """
+        print("\n  {}".format(prompt))
+        print("  right click to capture, middle click to scrap it and ask again")
+        notify.beep(times=2, on=0.08, gap=0.08)
+        if notify.wait_for_button(("right", "middle")) == "middle":
+            print("  scrapped.")
+            return None
+        angles = [a.position for a in cyclic.RefreshFeedback().actuators]
+        print("  captured {}".format(", ".join("{:+.1f}".format(a) for a in angles)))
+        return angles
+
+    def ask(prompt, joints=False):
         while True:
-            point = capture(prompt)
+            point = capture_joints(prompt) if joints else capture(prompt)
             if point is not None:
                 return point
 
@@ -282,6 +359,37 @@ def main():
         layout = fetch("/api/layout")
         sector = layout["sector"]
         notes = []
+
+        if TARGET == "portrait":
+            print("\nPush the arm until the camera looks at where a person will")
+            print("stand. Watch the live page while you do it, which is what it")
+            print("is for: {}/".format(STREAM))
+            print("Blank wall behind them, light on their face and not behind it.")
+            pose = ask("camera looking at the spot where somebody will stand",
+                       joints=True)
+
+            print("\n" + "=" * 68)
+            print("what the camera can see from there")
+            print("=" * 68)
+            seen = look(pose)
+            for line in seen["lines"]:
+                print("  {}".format(line))
+
+            print("\nwould save : six joint angles, and a face mark at {:.0%} across,"
+                  .format(TARGET_XY[0]))
+            print("             {:.0%} down the frame".format(TARGET_XY[1]))
+            if not ARMED:
+                print("\nDRY RUN. Nothing saved. Re-run with KINOVA_CONFIRM=yes to keep it.")
+                raise SystemExit(0)
+            layout["portrait"] = {"pose": [round(a, 3) for a in pose],
+                                  "target": list(TARGET_XY),
+                                  "taught_at": time.time()}
+            problem = save_layout(layout)
+            if problem:
+                raise SystemExit("Could not save: {}".format(problem))
+            print("\nSaved. New person on the pad will now look from here.")
+            notify.beep(times=3, on=0.12, gap=0.1)
+            raise SystemExit(0)
 
         if TARGET == "pots":
             a = ask("brush into the FIRST pot, at one end of the block")

@@ -150,8 +150,39 @@ def placed(item):
     return {"x": num(item["x"], -1.0, 1.0), "y": num(item["y"], -1.0, 1.0), "rot": rot(item["rot"])}
 
 
-def clean_layout(data):
+def clean_portrait(data):
+    """The pose the arm looks from for a headshot, taught by hand in teach.py.
+
+    Joint angles rather than a Cartesian pose, because a pose read off the
+    arm's own joints is reachable by construction: teaching it meant having the
+    arm there. Same argument as the paper corners.
+    """
+    if not data:
+        return None
+    pose = data.get("pose")
+    if not isinstance(pose, list) or len(pose) != 6:
+        raise ValueError("a portrait pose is six joint angles")
+    target = data.get("target") or [0.50, 0.42]
+    return {
+        "pose": [num(v, -360.0, 360.0) for v in pose],
+        "target": [num(target[0], 0.05, 0.95), num(target[1], 0.05, 0.95)],
+        "taught_at": float(data.get("taught_at") or time.time()),
+    }
+
+
+def clean_layout(data, keep=None):
+    """Validate a layout. `keep` is the stored one, for fields the sender omits.
+
+    The setup page knows nothing about the portrait pose, so a layout saved
+    from it arrives without one. Dropping it there would silently un-teach the
+    arm every time somebody drags a sheet, and the next visitor would be told
+    to go and find someone who can teach it.
+    """
     out = {"sheets": {}, "nogo": []}
+    portrait = data.get("portrait") or (keep or {}).get("portrait")
+    portrait = clean_portrait(portrait)
+    if portrait:
+        out["portrait"] = portrait
     for name in ("display", "keepsake"):
         out["sheets"][name] = placed(data["sheets"][name])
     out["pots"] = placed(data["pots"])
@@ -353,8 +384,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(404, {"error": "unknown endpoint"})
         if not self.authorised():
             return self.demand_password()
+        with _lock:
+            stored = read_layout()
         try:
-            layout = clean_layout(self.read_body())
+            layout = clean_layout(self.read_body(), stored)
         except Exception as e:
             return self.send_json(400, {"error": str(e) or "bad layout"})
         with _lock:
