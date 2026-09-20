@@ -1,8 +1,9 @@
 # Capture: the arm takes the photograph
 
-A plan, not a feature yet. Written 2026-09-20, away from the arm, so that the parts
-that can be built and tested on a laptop are separated from the two that need
-somebody standing next to the machine.
+Written 2026-09-20, away from the arm, so that the parts that can be built and
+tested on a laptop are separated from the ones that need somebody standing next
+to the machine. Steps 1 to 6 are now built, and "Where this got to" says what
+came out different from the plan.
 
 ## What it should feel like
 
@@ -110,13 +111,14 @@ Changed:
 | file | what |
 |---|---|
 | `portrait.py` | vendored in from `pointillism-portrait`, and split so `render(bgr)` hands back dabs and a thumb. The CLI becomes a wrapper over it |
-| `pad_server.py` | `/api/capture`: POST a request, POST a proposal, POST a decision. Jobs gain a `kind` |
+| `pad_server.py` | `/api/capture`: request, state, propose, decide. Held in memory, never written down |
 | `pad.html` | the New person button, and the full screen preview with its three buttons |
-| `run_queue.py` | dispatch on `kind`, so a capture request gets the same beep and click a painting does |
+| `run_queue.py` | serve a waiting person before the queue, with the same beep and click a painting gets |
 | `teach.py` | `KINOVA_TEACH=portrait`, which records the pose to look from |
 
-Exit codes stay a contract. 75 busy and 76 not at Home carry over unchanged, and 77
-means no face was found and it gave up, which the runner reports without retrying.
+Exit codes stay a contract. 75 busy and 76 not at Home carry over unchanged, 77
+means no face was found and it gave up, and 78 means the portrait pose was never
+taught. The runner reports the last two rather than retrying them.
 
 ### armlock.py, and why now
 
@@ -148,6 +150,40 @@ layout.portrait = {
 
 A mark on the floor where people stand is worth more than any amount of code here.
 
+## Where this got to
+
+Steps 1 to 6 are built and tested on a laptop, with no arm and no camera. What
+is left is steps 7 to 9, which all need somebody standing at the machine.
+
+Four things came out different from the plan above, and the plan is wrong
+rather than the code:
+
+- **Jobs did not need a `kind` field.** A capture request is not a queue entry:
+  it is a separate piece of state the runner checks first. That is better than
+  queueing it, because a painting is forty minutes and nobody waits that long
+  to be photographed, and it left the job schema alone.
+- **`KINOVA_FAKE_CAM` became a pretend pan-tilt head**, not a fixed still. It
+  asks the arm where it is pointing and returns the part of the still a camera
+  at that bearing would see, and the dry-run arm integrates the speeds it is
+  sent. So the framing loop really is tested, gains and all. What it cannot
+  know is which way joint 0 physically turns, so `KINOVA_YAW_SIGN` and
+  `KINOVA_PITCH_SIGN` are knobs and are the first thing to check at the arm.
+- **The two detectors swapping mid-loop was a bug**, found by that simulator.
+  The coarse and fine phases aim at different points on the same person, so
+  differencing across a swap gave a derivative term measuring the swap rather
+  than the person, and it arrived as a kick. A phase change now breaks the
+  chain.
+- **Standing too close breaks the framing promise** and nothing had noticed.
+  Under about a metre the frame cannot hold 2.6 face heights, and the old code
+  silently cropped tighter, so that one portrait is framed differently from
+  every other one on the wall. It is now reported rather than corrected: the
+  fix is a step backwards and only a person can take it.
+
+`armlock.py` is the one piece with no test behind it. Windows has no `flock`,
+so on this laptop it degrades to not locking and says so. It needs ten seconds
+on the Pi: run `paint_sim.py` and `headshot.py` at once and check the second
+one refuses and names the first.
+
 ## What can be built and tested without the arm
 
 Most of it, if `headshot.py` gets a `KINOVA_FAKE_CAM=some.jpg` mode that stands in
@@ -157,12 +193,17 @@ accept, queued job, and `paint_sim` dry running the result.
 
 Order, each step testable before the next:
 
-1. `portrait.py` vendored and split so `render()` is importable. Test on `sample.jpg`.
-2. `pad_server.py` capture endpoints and `kind`. Test with curl.
-3. `pad.html` button and preview overlay. Test against a faked proposal.
-4. `headshot.py` with `KINOVA_FAKE_CAM`. End to end on the laptop, no arm.
-5. `armlock.py`, and take the lock in `paint_sim.py` and `track.py` too.
-6. `run_queue.py` dispatch.
+1. done. `portrait.py` vendored and split so `render()` is importable.
+   `test_portrait.py` compares it against the old inline pipeline.
+2. done. `pad_server.py` capture endpoints. `test_capture.py` walks the whole
+   state machine over HTTP against the real server.
+3. done. `pad.html` button and preview overlay, and the two demo copies.
+4. done. `headshot.py` with `KINOVA_FAKE_CAM`. `test_framing.py` makes the
+   framing loop chase a face on a laptop.
+5. done in this repo. `armlock.py`, taken by `paint_sim.py` and `headshot.py`.
+   `track.py` lives in genwatch and still has to take it.
+6. done. `run_queue.py` dispatch, with `test_runqueue.py` driving the real
+   runner and the real headshot against a still.
 
 Then at the arm:
 

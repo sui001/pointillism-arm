@@ -38,7 +38,11 @@ the blending.
 | `pointillism-queue.service` | systemd unit for the runner, so the arm is ready to paint from boot |
 | `pad_server.py` | Serves both pages, holds the queue on disk, stores the layout. Standard library only |
 | `paint_sim.py` | Walks a queued job through every arm movement, with no paint and no contact |
-| `run_queue.py` | Paints the whole queue, oldest first, pausing between jobs for someone to change the paper |
+| `run_queue.py` | Paints the whole queue, oldest first, pausing between jobs for someone to change the paper, and serving a New person request before the queue |
+| `headshot.py` | The arm side of New person: goes to the taught pose, frames a face, takes one frame, renders it, offers it to the pad. Never writes the photograph down |
+| `portrait.py` | Turns a frame into 1260 cells of five pigments, by dithering in Oklab. Importable, with a command line over the same call for a file |
+| `stages.py` | Writes a page showing every stage of that, and sweeps the two settings that matter. For when a render is not quite a face |
+| `armlock.py` | One flock, so only one thing ever drives the arm. `python armlock.py` says who has it |
 | `goto_pose.py` | Parks the arm at a factory pose, Home nearly always. What the queue tells you to run when it refuses to start |
 | `jog_joint.py` | Moves one joint at a time, for recovering from a pose that a whole-pose move should not be trusted with |
 | `soft_limits.py` | Shows the arm's kinematic soft limits and sets the ones a painting uses. Will not write while the arm is moving |
@@ -49,6 +53,30 @@ the blending.
 Nothing about the rig is hardcoded. The sheets, the pots, the working sweep and the
 no-go boxes all live in `layout.json`, written by the setup page, so the whole thing
 can be set up anywhere.
+
+## Having the arm paint you
+
+There is a second way to get a painting, which needs nothing from the visitor
+but standing still. They press **New person** on the pad, the runner beeps and
+waits for a click at the machine, and then the arm goes to a pose that was
+taught by hand, looks for a face, frames it the same way it frames everybody,
+and takes one photograph. The render comes back to the pad as dabs and they
+say **Paint it**, **Another go** or **No thanks**.
+
+The photograph is never stored. It is a frame in memory for about a second, it
+becomes 1260 cells, and it goes. There is no flag anywhere that saves one, and
+that is deliberate: it is the only version of this that can be explained to a
+person in a gallery in one sentence.
+
+Framing is half joints and half crop. Where the face sits in the frame is the
+arm's job, on joints 0 and 4. How big the face is is not: driving the arm in
+and out to normalise face size is a Cartesian move near somebody's head for a
+result a crop gives free, so `portrait.py` crops a fixed multiple of the
+measured face height instead. Tall visitor, short visitor, one step closer to
+the machine: same framing. If somebody stands close enough that the frame
+cannot hold the usual crop, it says so rather than quietly cropping tighter.
+
+`CAPTURE.md` has the whole design and what is still to do.
 
 ## How the painting works
 

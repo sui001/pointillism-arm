@@ -65,6 +65,7 @@ from kortex_api.autogen.messages import Base_pb2, Session_pb2
 
 sys.stdout.reconfigure(line_buffering=True)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import armlock
 import kenv
 kenv.load()
 
@@ -370,6 +371,17 @@ print("layout    : sheets {} and {}, pots {}".format(
 print("limits    : sweep {:.0f} to {:.0f} deg, {} no-go box(es), reach {:.2f}-{:.2f} m".format(
     layout["sector"]["from"], layout["sector"]["to"], len(layout["nogo"]), MIN_REACH, MAX_REACH))
 print("heights   : PLACEHOLDER. Nothing is meant to touch.\n")
+
+# One thing drives the arm at a time. headshot.py takes the same lock, and so
+# should track.py. Two sessions at once does not fail cleanly: it presents as
+# the arm refusing every move for no reason at all, which is the state that
+# cost forty minutes on 2026-09-17. Held until this process exits, which the
+# kernel sees to however it exits.
+try:
+    _arm_lock = armlock.take("paint_sim job {}".format(job["id"]), wait=3.0)
+except armlock.Busy as _busy:
+    print("Refusing: {}.".format(_busy), file=sys.stderr)
+    raise SystemExit(BUSY_EXIT)
 
 transport = TCPTransport()
 router = RouterClient(transport, RouterClient.basicErrorCallback)
