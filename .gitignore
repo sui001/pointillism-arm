@@ -6,3 +6,16 @@ jobs/
 # python bytecode, created by running anything here
 __pycache__/
 *.pyc
+
+# Photographs of people, and anything rendered from one. This repo is public and
+# the whole argument for the portrait side is that the painting is the artefact
+# and the photograph is not kept, so nothing here quietly becomes an album.
+# sample.jpg lives untracked beside portrait.py for testing; it stays untracked.
+*.jpg
+*.jpeg
+*.JPG
+*.png
+*.heic
+
+# stages.py writes its contact sheet beside itself, and it is full of faces.
+/index.html
