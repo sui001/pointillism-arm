@@ -25,6 +25,15 @@ password set, the setup page is refused outright rather than left open.
     POST /api/jobs/<id>/done   painted and collected, drop it from the queue
     GET  /api/layout      where the sheets, pots, brushes and no-go zones are
     PUT  /api/layout      save that, from setup.html
+    GET  /api/capture     how far the New person flow has got
+    POST /api/capture/request   a visitor asking to be photographed
+    POST /api/capture/state     headshot.py saying what it is doing
+    POST /api/capture/propose   headshot.py offering a render to accept
+    POST /api/capture/decide    the visitor saying paint it, again, or bin it
+
+The capture state is held in memory and never written to disk, unlike the
+queue. A render of somebody's face that nobody accepted should not outlive
+the moment, and the accepted ones become ordinary jobs anyway.
 
 Base frame, metres: +x is the front of the arm (away from the base panel),
 +y is the arm's left, so the right side is negative y. rot is 0 or 90 deg.
@@ -80,6 +89,25 @@ _next_id = 1
 _run = {"state": "idle", "job": None, "total": 0, "index": 0,
         "points": [], "labels": [], "label": "", "at": None,
         "started": 0.0, "updated": 0.0}
+
+# Where the New person flow has got to. Runtime only, deliberately: see the
+# module docstring. The dabs live here between headshot.py rendering them and
+# the visitor deciding, and go no further if the answer is no.
+#
+#   idle       nobody is being photographed
+#   requested  somebody pressed the button; run_queue.py will pick it up
+#   capturing  headshot.py has the arm and is framing a face
+#   proposed   there is a render on screen waiting for a yes or a no
+#   failed     it gave up, and `reason` says why
+CAPTURE_IDLE = {"state": "idle", "reason": "", "thumb": "", "dab_count": 0,
+                "since": 0.0}
+_capture = dict(CAPTURE_IDLE)
+_capture_dabs = []
+# A request nobody serves, or a render nobody answers, must not wedge the button
+# for the rest of the day. Five minutes is far longer than either step takes and
+# short enough that the next visitor is not locked out.
+CAPTURE_TTL = float(os.environ.get("CAPTURE_TTL", "300"))
+CAPTURE_STATES = ("requested", "capturing", "proposed", "failed")
 
 
 def clean_dabs(raw):
@@ -172,6 +200,61 @@ def save_job(job):
     os.replace(tmp, os.path.join(JOBS_DIR, "{}.json".format(job["id"])))
 
 
+class Full(Exception):
+    """The queue is full. Its own type because it is a 429, not a 400."""
+
+
+def queue_job(dabs, thumb):
+    """Put a validated set of dabs in the queue. Call with _lock held.
+
+    Both ways in end up here: a visitor drawing on the pad, and a visitor
+    accepting a render of their own face. They are the same job by the time the
+    arm sees them, and that is the point of the capture flow ending in one.
+    """
+    global _next_id
+    if sum(1 for j in _jobs if not j.get("done")) >= MAX_JOBS:
+        raise Full("the queue is full")
+    job = {
+        "id": _next_id,
+        "submitted_at": time.time(),
+        "grid": dict(GRID),
+        "dabs": dabs,
+        "dab_count": len(dabs),
+        "thumb": clean_thumb(thumb),
+        "copies": [dict(c) for c in COPIES],
+    }
+    _next_id += 1
+    _jobs.append(job)
+    try:
+        save_job(job)
+    except OSError as e:
+        print("could not save job {}: {}".format(job["id"], e), flush=True)
+    return job, len(_jobs)
+
+
+def capture_now():
+    """The capture state, with a stale one aged out. Call with _lock held.
+
+    Expiry is applied on read rather than by a timer thread: there is nothing to
+    do about a stale state until somebody asks, and a timer would be one more
+    thing to get wrong around a restart.
+    """
+    global _capture, _capture_dabs
+    if (_capture["state"] in CAPTURE_STATES
+            and time.time() - _capture["since"] > CAPTURE_TTL):
+        _capture = dict(CAPTURE_IDLE)
+        _capture_dabs = []
+    return _capture
+
+
+def capture_set(state, reason="", thumb="", dab_count=0):
+    """Move the capture flow to a state. Call with _lock held."""
+    global _capture
+    _capture = {"state": state, "reason": str(reason)[:200], "thumb": thumb,
+                "dab_count": int(dab_count), "since": time.time()}
+    return _capture
+
+
 def setup_password():
     """From SETUP_PASSWORD, else setup_password.txt beside this file. Never committed."""
     value = os.environ.get("SETUP_PASSWORD")
@@ -243,6 +326,9 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/run":
             with _lock:
                 return self.send_json(200, dict(_run))
+        if self.path == "/api/capture":
+            with _lock:
+                return self.send_json(200, dict(capture_now()))
         if self.path.startswith("/api/jobs/"):
             try:
                 jid = int(self.path.rsplit("/", 1)[1])
@@ -310,6 +396,82 @@ class Handler(SimpleHTTPRequestHandler):
                 _run.update({"state": str(event or "done")[:20], "updated": now})
         return self.send_json(200, {"ok": True})
 
+    def post_capture(self, step):
+        """The New person flow. Four steps, two of them from the arm's own Pi.
+
+        request and decide are the visitor's, so they are open the way the pad
+        is. state and propose come from headshot.py and carry the studio
+        password, because a proposal turns into arm positions and anyone with
+        the Funnel URL can reach this.
+        """
+        global _capture_dabs
+        # Read the body before refusing on the password. A handler that answers
+        # and returns with bytes still in the socket gives the client a reset
+        # instead of the 401 it was told about, which showed up here once as a
+        # ConnectionAbortedError in the middle of a passing test.
+        try:
+            data = self.read_body()
+        except Exception:
+            data = {}       # request carries nothing, and a bad body fails below
+        if step in ("state", "propose") and not self.authorised():
+            return self.demand_password()
+
+        with _lock:
+            now = capture_now()
+
+            if step == "request":
+                # One person at a time. The button is not a queue: a second
+                # press while somebody is being photographed would either
+                # interrupt them or silently do nothing, and refusing says so.
+                if now["state"] in ("requested", "capturing", "proposed"):
+                    return self.send_json(409, {"error": "somebody is already being painted",
+                                                "capture": dict(now)})
+                _capture_dabs = []
+                return self.send_json(200, dict(capture_set("requested")))
+
+            if step == "state":
+                state = data.get("state")
+                if state not in ("capturing", "failed", "idle"):
+                    return self.send_json(400, {"error": "unknown state"})
+                if state == "idle":
+                    _capture_dabs = []
+                    return self.send_json(200, dict(capture_set("idle")))
+                return self.send_json(200, dict(capture_set(state, data.get("reason", ""))))
+
+            if step == "propose":
+                try:
+                    dabs = clean_dabs(data["dabs"])
+                except (ValueError, KeyError, TypeError) as e:
+                    return self.send_json(400, {"error": str(e) or "expected {dabs:[...], thumb}"})
+                _capture_dabs = dabs
+                return self.send_json(200, dict(capture_set(
+                    "proposed", thumb=clean_thumb(data.get("thumb")),
+                    dab_count=len(dabs))))
+
+            # decide
+            choice = data.get("decision")
+            if choice not in ("paint", "again", "bin"):
+                return self.send_json(400, {"error": "decision must be paint, again or bin"})
+            if choice == "bin":
+                _capture_dabs = []
+                return self.send_json(200, {"capture": dict(capture_set("idle"))})
+            if choice == "again":
+                # The same path from the top, which is why there is no separate
+                # retry: another go is another request.
+                _capture_dabs = []
+                return self.send_json(200, {"capture": dict(capture_set("requested"))})
+            if now["state"] != "proposed" or not _capture_dabs:
+                return self.send_json(409, {"error": "there is nothing to accept",
+                                            "capture": dict(now)})
+            try:
+                job, position = queue_job(_capture_dabs, now["thumb"])
+            except Full as e:
+                return self.send_json(429, {"error": str(e)})
+            _capture_dabs = []
+            capture_set("idle")
+            return self.send_json(201, {"id": job["id"], "position": position,
+                                        "capture": dict(_capture)})
+
     def mark_done(self, raw):
         """Painted and collected. It leaves the queue but the file stays as the record."""
         if not self.authorised():
@@ -332,10 +494,17 @@ class Handler(SimpleHTTPRequestHandler):
         return self.send_json(200, {"id": jid, "waiting": waiting})
 
     def do_POST(self):
-        global _next_id
         if self.path == "/api/run":
             return self.post_run()
         parts = self.path.strip("/").split("/")
+        if len(parts) == 3 and parts[:2] == ["api", "capture"]:
+            if parts[2] in ("request", "state", "propose", "decide"):
+                return self.post_capture(parts[2])
+            try:
+                self.read_body()          # drain it, so the 404 is what arrives
+            except Exception:
+                pass
+            return self.send_json(404, {"error": "unknown capture step"})
         if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "done":
             return self.mark_done(parts[2])
         if self.path != "/api/jobs":
@@ -346,24 +515,10 @@ class Handler(SimpleHTTPRequestHandler):
         except (ValueError, KeyError, TypeError) as e:
             return self.send_json(400, {"error": str(e) or "expected {dabs:[...], thumb}"})
         with _lock:
-            if sum(1 for j in _jobs if not j.get("done")) >= MAX_JOBS:
-                return self.send_json(429, {"error": "the queue is full"})
-            job = {
-                "id": _next_id,
-                "submitted_at": time.time(),
-                "grid": dict(GRID),
-                "dabs": dabs,
-                "dab_count": len(dabs),
-                "thumb": clean_thumb(data.get("thumb")),
-                "copies": [dict(c) for c in COPIES],
-            }
-            _next_id += 1
-            _jobs.append(job)
-            position = len(_jobs)
             try:
-                save_job(job)
-            except OSError as e:
-                print("could not save job {}: {}".format(job["id"], e), flush=True)
+                job, position = queue_job(dabs, data.get("thumb"))
+            except Full as e:
+                return self.send_json(429, {"error": str(e)})
         self.send_json(201, {"id": job["id"], "position": position})
 
     def log_message(self, fmt, *args):
