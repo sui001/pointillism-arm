@@ -227,8 +227,7 @@ Then at the arm:
 - **Three repos, one `~/kinova`.** Half settled. `portrait.py` is vendored in here,
   `genwatch`'s README now says which repo owns which file, and the five shared
   scripts are byte identical again after `goto_pose.py` and `notify.py` had drifted.
-  What is left is the live footgun: `genwatch/install.sh` copies `kinova/*.py` over
-  `~/kinova`, and genwatch still carries stale copies of `paint_sim.py`,
-  `run_queue.py` and `pad_server.py`, so running it after a deploy from here puts
-  the September versions back. They want deleting from genwatch. Until then, deploy
-  this repo *after* `install.sh`, never before.
+  genwatch's stale copies of `paint_sim.py`, `run_queue.py`, `pad_server.py` and the
+  pages have moved to its `retired/`, out of reach of the `kinova/*.py` copy in its
+  `install.sh`, which would otherwise have put the September versions back over a
+  deploy from here. Nothing points at them again.
