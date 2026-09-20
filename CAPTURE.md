@@ -200,8 +200,8 @@ Order, each step testable before the next:
 3. done. `pad.html` button and preview overlay, and the two demo copies.
 4. done. `headshot.py` with `KINOVA_FAKE_CAM`. `test_framing.py` makes the
    framing loop chase a face on a laptop.
-5. done in this repo. `armlock.py`, taken by `paint_sim.py` and `headshot.py`.
-   `track.py` lives in genwatch and still has to take it.
+5. done. `armlock.py`, taken by `paint_sim.py` and `headshot.py` here, and by
+   `track.py` in genwatch.
 6. done. `run_queue.py` dispatch, with `test_runqueue.py` driving the real
    runner and the real headshot against a still.
 
@@ -224,8 +224,11 @@ Then at the arm:
   rather than down. Expect to need it.
 - **The framing loop will look like hunting** to somebody being pointed at. A slow
   ceiling, a deadband and giving up cleanly matter more than converging perfectly.
-- **Three repos, one `~/kinova`.** `pointillism-arm`, `genwatch/kinova` and
-  `pointillism-portrait` all deploy into the same directory on the Pi, and the shared
-  files have already drifted: `paint_sim.py`, `run_queue.py` and `goto_pose.py` all
-  differ between the first two. Vendoring `portrait.py` in makes that worse before it
-  gets better. Worth deciding which repo owns the Pi.
+- **Three repos, one `~/kinova`.** Half settled. `portrait.py` is vendored in here,
+  `genwatch`'s README now says which repo owns which file, and the five shared
+  scripts are byte identical again after `goto_pose.py` and `notify.py` had drifted.
+  What is left is the live footgun: `genwatch/install.sh` copies `kinova/*.py` over
+  `~/kinova`, and genwatch still carries stale copies of `paint_sim.py`,
+  `run_queue.py` and `pad_server.py`, so running it after a deploy from here puts
+  the September versions back. They want deleting from genwatch. Until then, deploy
+  this repo *after* `install.sh`, never before.
