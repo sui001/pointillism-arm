@@ -5,8 +5,14 @@ For each job: run paint_sim.py for it, mark it done so it leaves the queue,
 beep, and wait for a left click before starting the next. That pause is when
 someone takes the two finished sheets off and puts blank paper down.
 
-Nothing here drives the arm. It runs paint_sim.py, which owns every movement
-and every refusal, so there is exactly one place the arm is commanded from.
+It also serves the pad's New person button, by running headshot.py, and that
+comes before the queue: somebody standing in front of the machine waiting to be
+photographed is not going to wait out a forty minute painting. It never
+interrupts one, because this loop only looks between jobs.
+
+Nothing here drives the arm. It runs paint_sim.py and headshot.py, each of
+which owns every movement it makes and every refusal, so there are exactly two
+places the arm is commanded from and neither of them is this file.
 
 Run it with the same python that can import kortex_api, since that is what it
 hands to paint_sim:
@@ -44,7 +50,10 @@ RETRY_PAUSE = 12
 IDLE_POLL = 5
 BUSY_EXIT = 75          # paint_sim's "the arm is busy", and it must match there
 NOT_HOME_EXIT = 76      # paint_sim's "park me first", likewise
+NO_FACE_EXIT = 77       # headshot's "nobody could be framed"
+NOT_TAUGHT_EXIT = 78    # headshot's "the portrait pose was never taught"
 PARK = os.path.join(HERE, "goto_pose.py")
+SHOT = os.path.join(HERE, "headshot.py")
 
 
 def studio_password():
@@ -103,6 +112,87 @@ def paint(job_id):
     return code
 
 
+def tell_capture(state, reason=""):
+    """Say why a capture stopped, for the person watching the pad rather than this."""
+    password = studio_password()
+    if not password:
+        return
+    token = base64.b64encode(("studio:" + password).encode()).decode()
+    request = urllib.request.Request(
+        PAD + "/api/capture/state",
+        data=json.dumps({"state": state, "reason": reason}).encode(),
+        method="POST", headers={"Content-Type": "application/json",
+                                "Authorization": "Basic " + token})
+    try:
+        urllib.request.urlopen(request, timeout=5).read()
+    except Exception as e:
+        print("  could not update the pad: {}".format(e))
+
+
+def take_headshot():
+    """Run headshot.py once, with the same retry a painting gets on a busy arm."""
+    env = os.environ.copy()
+    code = 1
+    for attempt in range(1, ATTEMPTS + 1):
+        if attempt > 1:
+            print("\n  attempt {} of {}".format(attempt, ATTEMPTS))
+        code = subprocess.run([sys.executable, SHOT], env=env).returncode
+        if code != BUSY_EXIT:
+            return code
+        if attempt < ATTEMPTS:
+            print("  the arm was still busy, another go in {}s".format(RETRY_PAUSE))
+            time.sleep(RETRY_PAUSE)
+    return code
+
+
+def capture():
+    """Serve one New person request, start to finish.
+
+    It gets the same click a painting gets. That click means something
+    different here: not "there is paper down" but "there is a person standing
+    in front of the arm and they know it is about to move". Which is a better
+    reason for it than the original one.
+    """
+    print("=" * 68)
+    print("somebody would like the arm to paint them")
+    print("=" * 68)
+    print("Ask them to stand on the mark, then left click the mouse.")
+    notify.beep()
+    notify.wait_for_click()
+    print("Off we go.\n")
+
+    code = take_headshot()
+
+    if code == NOT_HOME_EXIT:
+        print("\nThe arm is not parked at Home, so it cannot look up.")
+        print("Stand clear, then click to park it at Home and try again.")
+        notify.beep()
+        notify.wait_for_click()
+        if park():
+            print("Parked. Off we go.\n")
+            code = take_headshot()
+        else:
+            tell_capture("failed", "the arm would not park at Home")
+            return
+
+    if code == 0:
+        print("\nThe render is on the pad. They say yes or no to it.\n")
+        return
+    if code == NO_FACE_EXIT:
+        # headshot has already told the pad why, in its own words.
+        print("\nNobody could be framed. The pad says so.\n")
+        return
+    if code == NOT_TAUGHT_EXIT:
+        print("\nThe portrait pose has never been taught, so there is nowhere")
+        print("to look. Somebody has to stand at the arm and show it, once:")
+        print("  KINOVA_TEACH=portrait KINOVA_CONFIRM=yes \\")
+        print("      ~/kinova-py310/bin/python ~/kinova/teach.py\n")
+        tell_capture("failed", "the arm has not been taught where to look")
+        return
+    print("\nThe headshot did not finish (exit {}). The reason is above.\n".format(code))
+    tell_capture("failed", "the arm could not take the photograph")
+
+
 def park():
     """Send the arm to Home, the way the failure message used to tell you to."""
     env = os.environ.copy()
@@ -134,6 +224,17 @@ def main():
         except Exception as e:
             print("cannot reach the pad ({}), waiting".format(e))
             time.sleep(IDLE_POLL)
+            continue
+
+        # Somebody standing in front of the machine comes before the queue. A
+        # painting is 40 minutes and nobody waits that long to be photographed,
+        # and this never interrupts one: the loop only gets here between jobs.
+        try:
+            waiting_person = fetch("/api/capture").get("state") == "requested"
+        except Exception:
+            waiting_person = False
+        if waiting_person:
+            capture()
             continue
 
         if not jobs:

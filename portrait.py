@@ -150,6 +150,20 @@ def crop_portrait(img, found=None):
         found = face_box(img)
     if found is None:
         return crop_to_grid(img)
+    left, top, width, height, _ = crop_geometry(img, found)
+    return img[int(top):int(top + height), int(left):int(left + width)]
+
+
+def crop_geometry(img, found):
+    """Where the head and shoulders crop goes, and whether it had to shrink.
+
+    Its own function so that `render` can report the shrinking without knowing
+    the numbers, and so the 2.6 lives in exactly one place. `scale` under 1
+    means the frame could not hold 2.6 face heights, so this crop is tighter
+    than everybody else's and the framing is no longer the same for everyone.
+    That happens when somebody stands too close, and the fix is a step
+    backwards, which only a person can take. So it is reported, not corrected.
+    """
     fx, fy, fw, fh = (int(v) for v in found)
     cx = fx + fw / 2.0
     cy = fy + fh / 2.0
@@ -162,7 +176,7 @@ def crop_portrait(img, found=None):
     width, height = width * scale, height * scale
     left = min(max(0.0, left), w - width)
     top = min(max(0.0, top), h - height)
-    return img[int(top):int(top + height), int(left):int(left + width)]
+    return left, top, width, height, scale
 
 
 def vignette(lab, paper, amount):
@@ -285,6 +299,8 @@ def render(img, find=True, face=None, gain=GAIN, chroma=CHROMA,
     if face is None and find:
         face = face_box(img)
     cropped = crop_portrait(img, face) if find else crop_to_grid(img)
+    too_close = bool(face is not None and find
+                     and crop_geometry(img, face)[4] < 1.0)
 
     small = cv2.resize(cropped, (COLS, ROWS), interpolation=cv2.INTER_AREA)
     palette = linear_to_oklab(srgb_to_linear(
@@ -309,6 +325,7 @@ def render(img, find=True, face=None, gain=GAIN, chroma=CHROMA,
         "counts": counts,
         "face": None if face is None else tuple(int(v) for v in face),
         "cropped_shape": (cropped.shape[1], cropped.shape[0]),
+        "too_close": too_close,
     }
 
 
