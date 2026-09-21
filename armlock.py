@@ -24,14 +24,41 @@ deletes it by hand out of habit and the lock has stopped meaning anything.
     ...
     lock.release()
 
+The file lives in /run/user/<uid>, not /run: everything here runs as pi and
+/run is root owned, so /run would have failed to open, said so in a NOTE nobody
+reads, and carried on without locking. KINOVA_LOCK overrides it, and every
+process that takes it must agree on the path or it is not a lock at all.
+
 Windows has no flock and no arm, so there it degrades to no locking and says
 so once. That is for running the tests on a laptop, nothing else.
 """
 import os
 import sys
+import tempfile
 import time
 
-LOCK_PATH = os.environ.get("KINOVA_LOCK", "/run/kinova.arm.lock")
+
+def _default_path():
+    """Somewhere every one of these processes can write, and the same one.
+
+    Not `/run`, which is the obvious answer and is wrong: it is root owned, and
+    everything here runs as pi, services included. The lock would have failed to
+    open, printed a NOTE nobody reads, and carried on without locking, which is
+    the exact failure it exists to prevent. Found by trying it on the Pi rather
+    than by thinking about it.
+
+    `/run/user/<uid>` is the per-user runtime directory, writable, and cleared
+    on reboot, which is what a lock file wants. Every service here is User=pi
+    and so is anybody at a terminal, so they all land on one path. Falling back
+    to /tmp keeps it working on a machine that has no such directory.
+    """
+    runtime = "/run/user/{}".format(os.getuid()) if hasattr(os, "getuid") else ""
+    if runtime and os.path.isdir(runtime) and os.access(runtime, os.W_OK):
+        return os.path.join(runtime, "kinova.arm.lock")
+    return os.path.join(tempfile.gettempdir(), "kinova.arm.lock")
+
+
+LOCK_PATH = os.environ.get("KINOVA_LOCK") or _default_path()
 
 try:
     import fcntl
@@ -95,8 +122,9 @@ def take(name, wait=0.0, path=None):
     try:
         fh = open(path, "a+")
     except OSError as e:
-        # /run needs root on some setups. Refusing to run over a lock we cannot
-        # take would be worse than running without it, but say so loudly.
+        # Refusing to run over a lock we cannot take would be worse than
+        # running without it, but say so loudly: an unlocked arm is the
+        # condition this file exists to make impossible.
         print("NOTE: cannot open {} ({}), carrying on without the arm lock."
               .format(path, e), file=sys.stderr)
         return Lock(None)
