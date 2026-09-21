@@ -80,9 +80,13 @@ Things that follow from this, all learned painfully:
   75 means the arm was busy and a retry is worth it. 76 means not at Home, and the
   runner offers to park on a click. Anything else is a standing refusal and is not
   retried. Change one file and you must change the other.
-- **`pad.html` exists three times**: the root copy the Pi serves, plus `docs/pad.html`
-  and `docs/index.html` for the GitHub Pages demo. `setup.html` exists twice. Keep them
-  in sync or the demo silently rots.
+- **Every visitor page exists twice, and `pad.html` three times**: the root copies the
+  Pi serves, plus `docs/` for the GitHub Pages demo, where `index.html` is another copy
+  of `pad.html`. That is `pad.html`, `portrait.html`, `pad.css`, `queue.js`,
+  `setup.html` and `display.html`. Keep them in sync or the demo silently rots.
+- **`pad_server` serves a whitelist, not a directory.** A new page, stylesheet or
+  script is a 404 until it is in `PAGES`, which is the right way round given the
+  Funnel URL, and is the first thing to check when a new file loads as nothing.
 - **Do not restart `pointillism-pad` while a job is painting.** The run state, which
   drives the wall display and the pad's progress bar, is in memory and is only sent
   once per job at plan time. A restart blanks it for the rest of the run.

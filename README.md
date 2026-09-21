@@ -15,7 +15,8 @@ and notice each other. The arm is a Kinova Gen3 (the 6 degree of freedom variant
 **[sui001.github.io/pointillism-arm](https://sui001.github.io/pointillism-arm/)**
 
 There is no arm behind that page, so it runs in demo mode: draw, submit, watch the
-queue fill up, all of it staying in your own browser. Nothing is sent anywhere.
+queue fill up, all of it staying in your own browser. Nothing is sent anywhere. The
+portrait page is there too, and says so rather than pretending to find a camera.
 
 ## Why dabs and not strokes
 
@@ -32,11 +33,13 @@ the blending.
 | File | What it does |
 |---|---|
 | `pad.html` | The visitor's pad: grid, palette, print queue with per job and total paint times |
+| `portrait.html` | The other way in: New person, and the render to accept or bin. Links across to the pad and back |
+| `pad.css`, `queue.js` | The theme, and the print queue panel. Shared by both visitor pages, because there is one queue and both have to say so identically |
 | `setup.html` | Bird's eye plan of the rig. Drag the sheets and pot block onto where they really are, set the sweep the arm may work in, add no-go boxes. Behind a password |
 | `display.html` | For a screen on the wall: the planned path, how much is done, and a live marker where the arm is |
 | `pointillism-pad.service` | systemd unit, so the Pi serves the pad from boot |
 | `pointillism-queue.service` | systemd unit for the runner, so the arm is ready to paint from boot |
-| `pad_server.py` | Serves both pages, holds the queue on disk, stores the layout. Standard library only |
+| `pad_server.py` | Serves the pages, holds the one queue on disk, stores the layout. Standard library only |
 | `paint_sim.py` | Walks a queued job through every arm movement, with no paint and no contact |
 | `run_queue.py` | Paints the whole queue, oldest first, pausing between jobs for someone to change the paper, and serving a New person request before the queue |
 | `headshot.py` | The arm side of New person: goes to the taught pose, frames a face, takes one frame, renders it, offers it to the pad. Never writes the photograph down |
@@ -57,11 +60,18 @@ can be set up anywhere.
 ## Having the arm paint you
 
 There is a second way to get a painting, which needs nothing from the visitor
-but standing still. They press **New person** on the pad, the runner beeps and
-waits for a click at the machine, and then the arm goes to a pose that was
-taught by hand, looks for a face, frames it the same way it frames everybody,
-and takes one photograph. The render comes back to the pad as dabs and they
-say **Paint it**, **Another go** or **No thanks**.
+but standing still. `portrait.html` is that way in, one link across from the pad
+and one back. They press **New person**, the runner beeps and waits for a click
+at the machine, and then the arm goes to a pose that was taught by hand, looks
+for a face, frames it the same way it frames everybody, and takes one
+photograph. The render comes back as dabs and they say **Paint it**, **Another
+go** or **No thanks**.
+
+**One queue, both ways in.** A portrait and a drawing somebody made with a
+finger are the same kind of job by the time the arm has them: same 30 x 42 grid,
+same two copies, painted in the order they arrived. Both pages show the same
+print queue panel, from the same `queue.js`, so neither of them can imply it has
+a queue of its own.
 
 The photograph is never stored. It is a frame in memory for about a second, it
 becomes 1260 cells, and it goes. There is no flag anywhere that saves one, and

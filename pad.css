@@ -1,0 +1,468 @@
+/* The pointillism pad, the portrait page and the studio setup all wear this.
+   It was inline in pad.html until there were two visitor pages, at which point
+   keeping one copy of the theme mattered more than keeping one file.
+
+   Served by pad_server, which serves only what it lists, so a new file here
+   needs adding to PAGES or it is a 404. */
+
+:root {
+  --paper: #eef0ea;
+  --paper-panel: #e3e6dc;
+  --paper-panel-2: #d9ddd0;
+  --thumb-paper: #f4f2ea;
+  --ink: #1e2420;
+  --ink-dim: #333a31;
+  --accent: #1b6e73;
+  --accent-contrast: #eaf6f5;
+  --error: #b3261e;
+  --line: rgba(30, 36, 32, 0.18);
+  --line-strong: rgba(30, 36, 32, 0.40);
+  --shadow: rgba(20, 24, 21, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #171a17;
+    --paper-panel: #20241f;
+    --paper-panel-2: #2a3029;
+    --ink: #f2f4ec;
+    --ink-dim: #d3dbd1;
+    --accent: #4fd1d9;
+    --accent-contrast: #0b2c2e;
+    --error: #ff8a80;
+    --line: rgba(242, 244, 236, 0.18);
+    --line-strong: rgba(242, 244, 236, 0.42);
+    --shadow: rgba(0, 0, 0, 0.55);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #171a17;
+  --paper-panel: #20241f;
+  --paper-panel-2: #2a3029;
+  --ink: #f2f4ec;
+  --ink-dim: #d3dbd1;
+  --accent: #4fd1d9;
+  --accent-contrast: #0b2c2e;
+  --error: #ff8a80;
+  --line: rgba(242, 244, 236, 0.18);
+  --line-strong: rgba(242, 244, 236, 0.42);
+  --shadow: rgba(0, 0, 0, 0.55);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Archivo", system-ui, sans-serif;
+  padding-inline: 20px;
+  padding-block: 28px 60px;
+  display: flex;
+  justify-content: center;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 980px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 18px;
+}
+
+.eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+h1 {
+  font-size: clamp(1.9rem, 1.5rem + 1.8vw, 2.9rem);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  margin: 0;
+}
+
+.dek {
+  max-width: 62ch;
+  color: var(--ink-dim);
+  font-size: 1rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.panel {
+  background: var(--paper-panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel h2 {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin: 0;
+  font-weight: 600;
+}
+
+.queue-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+#queue-count {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.queue {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  min-height: 116px;
+}
+
+figure.qthumb {
+  margin: 0;
+  width: 68px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+figure.qthumb img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 30 / 42;
+  background: var(--thumb-paper);
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+}
+
+figure.qthumb .blank {
+  width: 100%;
+  aspect-ratio: 30 / 42;
+  background: var(--thumb-paper);
+  border: 1px dashed var(--line-strong);
+  border-radius: 2px;
+}
+
+figure.qthumb.next img,
+figure.qthumb.next .blank { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+figure.qthumb figcaption {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--ink);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+figure.qthumb.next figcaption { color: var(--accent); font-weight: 600; }
+
+.qmore {
+  width: 68px;
+  aspect-ratio: 30 / 42;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+  font-size: 1.25rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  main { grid-template-columns: 1fr; }
+}
+
+.canvas-frame {
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  box-shadow: inset 0 1px 3px var(--shadow);
+  padding: 4px;
+}
+
+#dab-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 30 / 42;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.canvas-caption {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  color: var(--ink-dim);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.palette {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.pigment {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.pigment[aria-checked="true"] {
+  box-shadow: 0 0 0 3px var(--paper-panel), 0 0 0 5px var(--accent);
+}
+
+.pigment:hover { transform: scale(1.06); }
+.pigment:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.pigment.eraser {
+  background:
+    linear-gradient(45deg, transparent 46%, var(--line-strong) 46%, var(--line-strong) 54%, transparent 54%),
+    var(--paper);
+}
+
+.readout {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.readout-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.readout-row span:first-child { color: var(--ink-dim); }
+
+/* Selectors on the class rather than on `button`, because crossing from one
+   page to the other is a link and should look like the button it replaces. */
+.action {
+  font-family: "Archivo", sans-serif;
+  font-weight: 700;
+  font-size: 0.88rem;
+  border-radius: 4px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+a.action {
+  display: inline-block;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.action:hover { background: var(--paper-panel-2); }
+.action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.action:disabled { cursor: progress; opacity: 0.7; }
+
+.primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+
+.primary:hover { background: var(--accent); filter: brightness(1.06); }
+
+#submit-status {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  min-height: 1.2em;
+  color: var(--accent);
+  margin: 0;
+}
+
+#submit-status.error { color: var(--error); }
+
+.note {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  margin: 0;
+}
+
+.note strong { color: var(--ink); }
+
+/* A panel that reads as a row rather than a stack: something said on the left,
+   one thing to press on the right. The pad uses it to send you across to the
+   portrait page, and the portrait page uses it for New person.
+
+   .panel is a flex column, so this has to say flex-direction out loud. Without
+   it, flex-basis lands on the wrong axis and the button sits at the bottom of a
+   340px tall panel. */
+.row-panel {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin-bottom: 18px;
+}
+
+.row-panel .grow { flex: 1 1 260px; }
+
+#portrait-status {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+  color: var(--accent);
+  margin: 6px 0 0;
+  min-height: 1.2em;
+}
+
+#portrait-status.error { color: var(--error); }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(12, 14, 12, 0.82);
+}
+
+.overlay[hidden] { display: none; }
+
+.overlay-card {
+  background: var(--paper-panel);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 18px 50px var(--shadow);
+  padding: 22px;
+  max-width: 460px;
+  width: 100%;
+  text-align: center;
+}
+
+.overlay-card h2 { margin: 0 0 6px; }
+
+/* The render is dabs on paper, so it sits on paper rather than on the panel:
+   it is a picture of the sheet, not a piece of the interface. */
+#portrait-preview {
+  width: 240px;
+  max-width: 70vw;
+  aspect-ratio: 30 / 42;
+  object-fit: contain;
+  background: var(--thumb-paper);
+  border: 1px solid var(--line);
+  margin: 14px auto;
+  display: block;
+}
+
+.overlay-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.qtime {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--accent);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.qbar {
+  height: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--paper-panel-2);
+  margin-top: 2px;
+}
+
+.qbar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.6s linear;
+}
+
+.qpct {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  color: var(--ink-dim);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.gear {
+  display: flex;
+  justify-content: center;
+  margin: 28px 0 0;
+}
+
+.gear a {
+  color: var(--line-strong);
+  display: inline-flex;
+  padding: 6px;
+  border-radius: 50%;
+}
+
+.gear a:hover { color: var(--accent); }
+.gear a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pigment { transition: none; }
+  .pigment:hover { transform: none; }
+}

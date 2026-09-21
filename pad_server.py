@@ -5,7 +5,7 @@ Binds to 127.0.0.1 by default, NOT 0.0.0.0: reachable only from this Pi
 itself, and from `tailscale funnel`, which proxies the public URL to
 127.0.0.1 locally. It is deliberately NOT on the campus network directly.
 
-Only pad.html and setup.html are served. The rest of ~/kinova is not public.
+Only the files in PAGES are served. The rest of ~/kinova is not public.
 
 Anyone with the Funnel URL can submit, and submitted dabs later become arm
 positions, so everything is validated here and the grid is fixed server-side.
@@ -56,7 +56,11 @@ BIND = os.environ.get("BIND") or "127.0.0.1"
 JOBS_DIR = os.path.join(DIR, "jobs")
 LAYOUT_PATH = os.path.join(DIR, "layout.json")
 PASSWORD_PATH = os.path.join(DIR, "setup_password.txt")
-PAGES = ("/pad.html", "/setup.html", "/display.html")
+# A whitelist, not a document root: the rest of ~/kinova is not public, and the
+# Funnel URL means "not public" has to mean it. A new page or asset that is not
+# listed here is a 404, which is the right way round.
+PAGES = ("/pad.html", "/portrait.html", "/setup.html", "/display.html",
+         "/pad.css", "/queue.js")
 GUARDED = "/setup.html"
 MAX_POINTS = 4000
 

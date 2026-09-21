@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Have the arm paint you</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="pad.css">
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <span class="eyebrow">Cybernetic Garden &middot; arm composer prototype</span>
+    <h1>Have the arm paint you</h1>
+    <p class="dek">
+      Stand on the mark in front of the arm. It will look for your face, take one
+      photograph, and show you what it would paint before anything is painted. The
+      photograph is never saved: only the dabs are, and only if you say yes.
+    </p>
+  </header>
+
+  <p class="note" id="demo-note" hidden style="color:var(--accent)">
+    Demo mode: no arm and no camera behind this page. Nothing here reaches a machine.
+  </p>
+
+  <section class="panel row-panel" aria-labelledby="portrait-title">
+    <div class="grow">
+      <h2 id="portrait-title">Ready when you are</h2>
+      <p class="note">
+        One press. Somebody at the arm clicks to start it, so nothing moves
+        before a person standing there has seen that you are ready.
+      </p>
+      <p id="portrait-status" role="status"></p>
+    </div>
+    <button class="action primary" id="portrait-btn" type="button">New person</button>
+  </section>
+
+  <section class="panel" aria-labelledby="queue-title">
+    <div class="queue-head">
+      <h2 id="queue-title">Print queue</h2>
+      <span id="queue-count">checking</span>
+    </div>
+    <div class="queue" id="queue" aria-live="polite"
+         data-empty="Nothing waiting. Yours would paint first."></div>
+    <p class="note">
+      One queue for the whole machine. A portrait and a drawing somebody made
+      with a finger are the same kind of job by the time the arm has them, and
+      they are painted in the order they arrived.
+    </p>
+  </section>
+
+  <section class="panel row-panel" aria-labelledby="crossing-title">
+    <div class="grow">
+      <h2 id="crossing-title">Or draw one yourself</h2>
+      <p class="note">
+        Drag a finger across the grid and put the dabs where you want them.
+        Same queue, same two copies.
+      </p>
+    </div>
+    <a class="action" href="pad.html">Draw my own</a>
+  </section>
+
+  <p class="note">
+    <strong>What happens to the photograph:</strong> it is never written down.
+    It exists inside the machine for about a second, becomes 1260 cells of
+    colour, and is gone. Saying no thanks leaves nothing behind, because there
+    was never anything left to leave.
+  </p>
+
+  <div class="overlay" id="portrait-overlay" hidden role="dialog" aria-modal="true"
+       aria-labelledby="portrait-overlay-title">
+    <div class="overlay-card">
+      <h2 id="portrait-overlay-title">Is this you?</h2>
+      <p class="note" id="portrait-overlay-note">
+        This is what the arm would paint, twice: one sheet for the wall, one for
+        you. The photograph it worked from has already been thrown away.
+      </p>
+      <img id="portrait-preview" alt="The portrait the arm would paint, as dabs of paint on paper">
+      <div class="overlay-buttons">
+        <button class="action primary" id="portrait-paint" type="button">Paint it</button>
+        <button class="action" id="portrait-again" type="button">Another go</button>
+        <button class="action" id="portrait-bin" type="button">No thanks</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="gear">
+    <a href="setup.html" title="Studio setup" aria-label="Studio setup">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M19.4 13a7.8 7.8 0 0 0 0-2l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.5L6.6 11a7.8 7.8 0 0 0 0 2l-2 1.5 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.5zM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5z"/></svg>
+    </a>
+  </p>
+</div>
+
+<script src="queue.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // This page only ever asks and answers. Everything in between belongs to the
+  // arm, so it polls for where the arm has got to rather than driving it.
+
+  var portraitBtn = document.getElementById("portrait-btn");
+  var portraitStatus = document.getElementById("portrait-status");
+  var overlay = document.getElementById("portrait-overlay");
+  var preview = document.getElementById("portrait-preview");
+  var lastCapture = "";
+  // Set while a decision is in flight, so a poll that was already on its way
+  // cannot put the overlay back up after the visitor has answered it.
+  var deciding = false;
+
+  function setPortrait(msg, isError) {
+    portraitStatus.textContent = msg || "";
+    portraitStatus.className = isError ? "error" : "";
+  }
+
+  function showOverlay(thumb) {
+    preview.src = thumb || "";
+    overlay.hidden = false;
+    document.getElementById("portrait-paint").focus();
+  }
+
+  function hideOverlay() {
+    overlay.hidden = true;
+    preview.removeAttribute("src");     // the render goes when the answer does
+  }
+
+  function renderCapture(cap) {
+    var state = cap && cap.state ? cap.state : "idle";
+    if (deciding) return;
+    portraitBtn.disabled = (state === "requested" || state === "capturing"
+                            || state === "proposed");
+    if (state === "proposed") {
+      if (lastCapture !== "proposed") showOverlay(cap.thumb);
+      setPortrait(cap.dab_count + " dabs, about "
+                  + PadQueue.fmtTime(cap.dab_count * PadQueue.secondsPerDab * PadQueue.copies) + " to paint.");
+    } else {
+      if (lastCapture === "proposed") hideOverlay();
+      if (state === "requested") {
+        setPortrait("Go and stand on the mark. Somebody at the arm clicks to start.");
+      } else if (state === "capturing") {
+        setPortrait("The arm is looking for your face. Hold still.");
+      } else if (state === "failed") {
+        // headshot.py's reasons are log lines, so they arrive lowercase.
+        var why = cap.reason || "it did not work";
+        setPortrait(why.charAt(0).toUpperCase() + why.slice(1)
+                    + ". Try again when you are ready.", true);
+      } else if (lastCapture && lastCapture !== "idle") {
+        setPortrait("");
+      }
+    }
+    lastCapture = state;
+  }
+
+  function loadCapture() {
+    if (PadQueue.isDemo()) return;
+    fetch("/api/capture", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (cap) { if (cap) renderCapture(cap); })
+      .catch(function () { /* the queue poll already reports a dead server */ });
+  }
+
+  portraitBtn.addEventListener("click", function () {
+    if (PadQueue.isDemo()) {
+      setPortrait("Demo mode: there is no arm and no camera behind this page.", true);
+      return;
+    }
+    portraitBtn.disabled = true;
+    setPortrait("Asking the arm...");
+    fetch("/api/capture/request", { method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: "{}" })
+      .then(function (r) {
+        return r.json().then(function (b) {
+          if (r.status === 409) throw new Error(b.error || "somebody is already being painted");
+          if (!r.ok) throw new Error(b.error || "HTTP " + r.status);
+          return b;
+        });
+      })
+      .then(function (cap) { renderCapture(cap); })
+      .catch(function (e) {
+        setPortrait(e.message + ".", true);
+        portraitBtn.disabled = false;
+      });
+  });
+
+  function decide(choice) {
+    deciding = true;
+    hideOverlay();
+    setPortrait(choice === "paint" ? "Sending it to the queue..." : "");
+    fetch("/api/capture/decide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision: choice })
+    })
+      .then(function (r) {
+        return r.json().then(function (b) {
+          if (!r.ok) throw new Error(b.error || "HTTP " + r.status);
+          return b;
+        });
+      })
+      .then(function (b) {
+        lastCapture = b.capture ? b.capture.state : "idle";
+        if (choice === "paint") {
+          setPortrait("Queued as #" + b.id + ", number " + b.position
+                      + " in line. Two copies: one for the wall, one for you.");
+          PadQueue.load();
+        } else if (choice === "again") {
+          setPortrait("Going round again. Stand on the mark.");
+        }
+        portraitBtn.disabled = (lastCapture !== "idle" && lastCapture !== "failed");
+      })
+      .catch(function (e) { setPortrait("Could not do that: " + e.message + ".", true); })
+      .then(function () { deciding = false; });
+  }
+
+  document.getElementById("portrait-paint").addEventListener("click", function () { decide("paint"); });
+  document.getElementById("portrait-again").addEventListener("click", function () { decide("again"); });
+  document.getElementById("portrait-bin").addEventListener("click", function () { decide("bin"); });
+
+  // With no pad_server behind it, which is what the GitHub Pages demo is, there
+  // is no arm to ask and the queue stays empty. The pad is where a visitor to
+  // the demo can actually make something.
+  PadQueue.onDemo = function () {
+    document.getElementById("demo-note").hidden = false;
+    portraitBtn.disabled = true;
+  };
+
+  PadQueue.start();
+  loadCapture();
+  setInterval(function () { if (!document.hidden) loadCapture(); }, 4000);
+})();
+</script>
+</body>
+</html>
