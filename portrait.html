@@ -109,6 +109,11 @@
   // Set while a decision is in flight, so a poll that was already on its way
   // cannot put the overlay back up after the visitor has answered it.
   var deciding = false;
+  // Set when a press was turned down because the arm is painting, so the catch
+  // below knows to leave the button off rather than inviting the same refusal.
+  var busyRefusal = false;
+  // True while the busy message is on screen, so it can be taken down again.
+  var wasBusy = false;
 
   function setPortrait(msg, isError) {
     portraitStatus.textContent = msg || "";
@@ -126,11 +131,38 @@
     preview.removeAttribute("src");     // the render goes when the answer does
   }
 
+  // The arm has one body. While it is painting it cannot photograph anybody,
+  // and the runner does not even look at a request until the job ends, which is
+  // most of an hour. Saying so is the whole job of this: the alternative is
+  // telling somebody to go and stand on a mark and then quietly expiring.
+  function waitWords(secs) {
+    if (secs === null || secs === undefined) return "It has just started.";
+    if (secs < 90) return "Nearly done.";
+    return "About " + Math.round(secs / 60) + " minutes left.";
+  }
+
   function renderCapture(cap) {
     var state = cap && cap.state ? cap.state : "idle";
     if (deciding) return;
+    var busy = !!(cap && cap.arm_painting);
     portraitBtn.disabled = (state === "requested" || state === "capturing"
-                            || state === "proposed");
+                            || state === "proposed"
+                            || (busy && state !== "failed"));
+    if (busy && state === "idle") {
+      wasBusy = true;
+      setPortrait("The arm is painting" + (cap.painting_job ? " #" + cap.painting_job : "")
+                  + ". " + waitWords(cap.seconds_left)
+                  + " The button wakes up when it finishes.");
+      lastCapture = state;
+      return;
+    }
+    if (wasBusy) {
+      // The painting finished. Clearing this is not cosmetic: the flow is idle
+      // and the button works, so leaving "about 3 minutes left" on screen tells
+      // somebody to keep waiting for something that already happened.
+      wasBusy = false;
+      setPortrait("The arm has finished. Press it whenever you are ready.");
+    }
     if (state === "proposed") {
       if (lastCapture !== "proposed") showOverlay(cap.thumb);
       setPortrait(cap.dab_count + " dabs, about "
@@ -173,7 +205,14 @@
                                     body: "{}" })
       .then(function (r) {
         return r.json().then(function (b) {
-          if (r.status === 409) throw new Error(b.error || "somebody is already being painted");
+          if (r.status === 409) {
+            if (b.arm_painting) {
+              busyRefusal = true;
+              throw new Error("The arm is painting. " + waitWords(b.seconds_left)
+                              + " Try again then");
+            }
+            throw new Error(b.error || "somebody is already being painted");
+          }
           if (!r.ok) throw new Error(b.error || "HTTP " + r.status);
           return b;
         });
@@ -181,7 +220,11 @@
       .then(function (cap) { renderCapture(cap); })
       .catch(function (e) {
         setPortrait(e.message + ".", true);
-        portraitBtn.disabled = false;
+        // Leave it disabled when the arm said it is painting: re-enabling it
+        // would invite a second press that gets the identical refusal. The
+        // next poll turns it back on by itself.
+        portraitBtn.disabled = busyRefusal;
+        busyRefusal = false;
       });
   });
 
@@ -230,6 +273,13 @@
   PadQueue.start();
   loadCapture();
   setInterval(function () { if (!document.hidden) loadCapture(); }, 4000);
+  // A tablet that has been asleep wakes up showing whatever was true when it
+  // went to sleep, which here could be "the arm is painting" long after it
+  // stopped. Catch up the moment somebody looks at it rather than up to four
+  // seconds later, which is the difference between stale and wrong.
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) { loadCapture(); PadQueue.load(); }
+  });
 })();
 </script>
 </body>

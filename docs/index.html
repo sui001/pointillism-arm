@@ -323,6 +323,9 @@
   draw();
   updateReadout();
   PadQueue.start();
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) PadQueue.load();
+  });
 })();
 </script>
 </body>

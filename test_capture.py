@@ -153,6 +153,32 @@ check("a decision nobody offered",
 check("an unknown step", call("/api/capture/sideways", {})[0], 404)
 call("/api/capture/decide", {"decision": "bin"})
 
+print("\nthe arm cannot photograph while it is painting")
+# The runner does not even look at a capture request until the current job
+# ends, so accepting one mid-painting means telling somebody to stand on a mark
+# for most of an hour and then expiring on them without a word.
+call("/api/run", {"event": "plan", "job": 7, "total": 1000}, PASSWORD)
+call("/api/run", {"event": "progress", "index": 250}, PASSWORD)
+S._run["started"] = S.time.time() - 600        # ten minutes in, a quarter done
+cap = call("/api/capture")[1]
+check("the pad is told the arm is busy", cap["arm_painting"], True)
+check("and which job", cap["painting_job"], 7)
+check("with a wait worked out from the pace so far",
+      1500 <= cap["seconds_left"] <= 1980, True)
+code, body = call("/api/capture/request", {})
+check("so a press is refused", code, 409)
+check("saying why, not just no", body.get("arm_painting"), True)
+check("and nothing was taken on", state(), "idle")
+
+print("\na paint_sim that died does not switch the button off for the day")
+S._run["updated"] = S.time.time() - (S.RUN_STALE + 5)
+check("silence for longer than a move takes means gone",
+      call("/api/capture")[1]["arm_painting"], False)
+check("and the button works again", call("/api/capture/request", {})[0], 200)
+call("/api/capture/decide", {"decision": "bin"})
+call("/api/run", {"event": "done"}, PASSWORD)
+check("a finished run is not painting", call("/api/capture")[1]["arm_painting"], False)
+
 print("\nthe taught portrait pose survives the setup page")
 POSE = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 lay = call("/api/layout")[1]

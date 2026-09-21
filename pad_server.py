@@ -112,6 +112,9 @@ _capture_dabs = []
 # short enough that the next visitor is not locked out.
 CAPTURE_TTL = float(os.environ.get("CAPTURE_TTL", "300"))
 CAPTURE_STATES = ("requested", "capturing", "proposed", "failed")
+# How long paint_sim can go quiet before a "running" run is treated as dead.
+# It reports every move, a few seconds apart, so two minutes is not thinking.
+RUN_STALE = float(os.environ.get("RUN_STALE", "120"))
 
 
 def clean_dabs(raw):
@@ -282,6 +285,41 @@ def capture_now():
     return _capture
 
 
+def painting_now():
+    """Is the arm painting, and roughly how much longer. Call with _lock held.
+
+    The arm cannot photograph somebody while it is painting, so this is what
+    stands between a visitor and a promise nobody can keep. Without it the pad
+    accepts a request, tells them to go and stand on the mark, and the runner
+    does not look at it until the current job ends forty minutes later, by
+    which time it has expired and they have been told nothing.
+
+    The estimate comes from elapsed time against progress rather than from a
+    seconds-per-dab figure, so it is self-calibrating: a slow run reports a
+    long wait without anybody updating a constant. It needs a few per cent of
+    the job done before it means anything, which is the `frac` floor.
+
+    `updated` going stale is the case that matters most. paint_sim reports
+    every move, a few seconds apart, so two minutes of silence means it died
+    rather than that it is thinking, and a dead run must not leave the button
+    switched off for the rest of the day.
+    """
+    if _run.get("state") != "running":
+        return False, None
+    if time.time() - (_run.get("updated") or 0) > RUN_STALE:
+        return False, None
+    total = _run.get("total") or 0
+    index = _run.get("index") or 0
+    started = _run.get("started") or 0
+    if not total or not started:
+        return True, None
+    frac = max(0.0, min(1.0, index / float(total)))
+    if frac < 0.02:
+        return True, None
+    elapsed = time.time() - started
+    return True, max(0, int(elapsed * (1.0 - frac) / frac))
+
+
 def capture_set(state, reason="", thumb="", dab_count=0):
     """Move the capture flow to a state. Call with _lock held."""
     global _capture
@@ -363,7 +401,14 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json(200, dict(_run))
         if self.path == "/api/capture":
             with _lock:
-                return self.send_json(200, dict(capture_now()))
+                out = dict(capture_now())
+                busy, left = painting_now()
+                # The page needs both halves in one answer: where the flow got
+                # to, and whether the arm could serve it at all.
+                out["arm_painting"] = busy
+                out["seconds_left"] = left
+                out["painting_job"] = _run.get("job") if busy else None
+                return self.send_json(200, out)
         if self.path.startswith("/api/jobs/"):
             try:
                 jid = int(self.path.rsplit("/", 1)[1])
@@ -463,6 +508,16 @@ class Handler(SimpleHTTPRequestHandler):
                 if now["state"] in ("requested", "capturing", "proposed"):
                     return self.send_json(409, {"error": "somebody is already being painted",
                                                 "capture": dict(now)})
+                # The arm cannot photograph while it is painting, and the runner
+                # will not look at this until the job ends. Taking the request
+                # anyway would mean telling somebody to go and stand on a mark
+                # for forty minutes, and then expiring on them without a word.
+                busy, left = painting_now()
+                if busy:
+                    return self.send_json(409, {
+                        "error": "the arm is painting and cannot take a photograph yet",
+                        "arm_painting": True, "seconds_left": left,
+                        "capture": dict(now)})
                 _capture_dabs = []
                 return self.send_json(200, dict(capture_set("requested")))
 
