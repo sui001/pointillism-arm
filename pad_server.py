@@ -59,9 +59,12 @@ PASSWORD_PATH = os.path.join(DIR, "setup_password.txt")
 # A whitelist, not a document root: the rest of ~/kinova is not public, and the
 # Funnel URL means "not public" has to mean it. A new page or asset that is not
 # listed here is a 404, which is the right way round.
-PAGES = ("/pad.html", "/portrait.html", "/setup.html", "/display.html",
-         "/pad.css", "/queue.js")
-GUARDED = "/setup.html"
+PAGES = ("/pad.html", "/portrait.html", "/setup.html", "/operator.html",
+         "/display.html", "/pad.css", "/queue.js")
+# Behind the password. The setup page because a layout becomes arm positions,
+# and the operator page because it is the staff instructions and a visitor
+# reading "power cycle the arm" is not what anybody wants.
+GUARDED = ("/setup.html", "/operator.html")
 MAX_POINTS = 4000
 
 GRID = {"cols": 30, "rows": 42, "pitch_mm": 7}
@@ -424,7 +427,7 @@ class Handler(SimpleHTTPRequestHandler):
         page = self.path.split("?")[0]
         if page not in PAGES:
             return self.send_json(404, {"error": "not found"})
-        if page == GUARDED and not self.authorised():
+        if page in GUARDED and not self.authorised():
             return self.demand_password()
         super().do_GET()
 

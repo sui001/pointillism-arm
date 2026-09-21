@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running the arm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="pad.css">
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <span class="eyebrow">Cybernetic Garden &middot; for whoever is minding the arm</span>
+    <h1>Running the arm</h1>
+    <p class="dek">
+      Not for visitors. This is the page for the person standing next to the
+      machine, and it assumes nothing except that the arm is switched on.
+    </p>
+  </header>
+
+  <section class="panel warn" aria-labelledby="clicks-title">
+    <h2 id="clicks-title">The thing that catches everybody</h2>
+    <p class="note">
+      <strong>There are two different clicks, and they are not the same click.</strong>
+      One starts a photograph. One starts a painting. The arm beeps and then
+      waits for a left click on the mouse before either, every time, and it
+      will wait all day. Nothing is stuck: it is waiting for you.
+    </p>
+    <p class="note">
+      <strong>A portrait does not jump the queue.</strong> Somebody who has just
+      been photographed is not about to watch their picture appear. It joins the
+      same queue as the drawings and gets painted in turn, forty to ninety
+      minutes a job. Tell them when to come back.
+    </p>
+  </section>
+
+  <section class="panel" aria-labelledby="portrait-title">
+    <h2 id="portrait-title">A portrait, start to finish</h2>
+    <ol class="steps">
+      <li>Sit them in the chair, facing the arm, with the plain background
+        behind them. <strong>The pose is taught once</strong> and is not redone
+        per person.</li>
+      <li>They press <strong>New person</strong> on the portrait page. That only
+        asks. Nothing moves.</li>
+      <li><strong>The arm beeps. You click.</strong> That click means a person is
+        in the chair and knows the machine is about to move.</li>
+      <li>The arm turns to the taught pose and <strong>frames their face</strong>,
+        panning and tilting until it sits on the mark, because everybody is a
+        different height. A few seconds. If it cannot find a face in 45 seconds
+        it gives up, parks, and the page says so. Have them sit up, look at the
+        camera, and press it again.</li>
+      <li>It takes <strong>one photograph</strong>, after it has stopped moving,
+        and turns it into 1260 dabs in memory. The photograph is never saved to
+        anything.</li>
+      <li>They see the render and choose: <strong>Paint it</strong>,
+        <strong>Another go</strong> (runs the whole thing again from the click),
+        or <strong>No thanks</strong> (nothing is kept, because there is nothing
+        left to keep).</li>
+      <li>Paint it puts it in the queue. The arm parks at Home and stops.</li>
+    </ol>
+  </section>
+
+  <section class="panel" aria-labelledby="paint-title">
+    <h2 id="paint-title">Painting whatever is in the queue</h2>
+    <ol class="steps">
+      <li><strong>Put blank paper down on both sheets</strong> before you click.
+        This is what the pause between jobs is for.</li>
+      <li>The arm beeps. You click. It paints the oldest job first, both copies
+        together, so the two sheets finish at the same time.</li>
+      <li>It beeps when the job is done. <strong>Take both sheets off.</strong>
+        One for the wall, one for whoever made it.</li>
+      <li>Fresh paper down, click, next job.</li>
+    </ol>
+  </section>
+
+  <section class="panel" aria-labelledby="before-title">
+    <h2 id="before-title">Before any of it works</h2>
+    <p class="note">
+      Two things have to be true, and both survive a reboot, so this is a
+      once-per-setup check rather than a daily one.
+    </p>
+    <ol class="steps">
+      <li><strong>The portrait pose has been taught.</strong> If it has not, the
+        page says the arm has not been told where to look, and no amount of
+        pressing helps. Someone has to hand guide the arm onto the chair once.</li>
+      <li><strong>The camera service is running.</strong> Without it there is
+        nothing to look through.
+        <pre>systemctl is-active kinova-stream pointillism-pad pointillism-queue</pre>
+        Three lines saying <code>active</code> is what you want.</li>
+    </ol>
+  </section>
+
+  <section class="panel" aria-labelledby="stuck-title">
+    <h2 id="stuck-title">When nothing is happening</h2>
+    <p class="note">
+      Work down this list and stop as soon as something works. Most stops never
+      get past the first line.
+    </p>
+    <ol class="steps">
+      <li><strong>Click the mouse.</strong> It is almost always this. The arm is
+        waiting for a person, which is the design, not a fault.</li>
+      <li><strong>Read the page.</strong> If a portrait failed it says why, in
+        words. If the arm is painting, New person is switched off on purpose and
+        says how long is left.</li>
+      <li><strong>Hand guide it clear.</strong> Wrist button to go compliant, lift
+        the tool up and back, let go, click.</li>
+      <li><strong>Ask what has the arm.</strong> Only one thing may drive it at a
+        time.
+        <pre>python3 ~/kinova/armlock.py</pre>
+        It names what is holding it, or says nothing is.</li>
+      <li><strong>Power cycle the arm.</strong> There is a state where it reports
+        itself perfectly healthy and refuses every move, and nothing but this
+        clears it. If a five degree jog is refused, you are in it. Do not spend
+        forty minutes first; somebody already did.</li>
+    </ol>
+  </section>
+
+  <section class="panel" aria-labelledby="privacy-title">
+    <h2 id="privacy-title">If somebody asks about the photograph</h2>
+    <p class="note">
+      It is never stored. It exists inside the machine for about a second,
+      becomes 1260 cells of colour, and is gone. There is no folder of faces and
+      no setting that makes one. If they say no thanks, nothing is deleted,
+      because nothing was ever written down. You can say all of that plainly.
+    </p>
+  </section>
+
+  <section class="panel row-panel" aria-labelledby="crossing-title">
+    <div class="grow">
+      <h2 id="crossing-title">The other pages</h2>
+      <p class="note">
+        Setup is where the paper and pots are placed. The pad and the portrait
+        page are the two visitor pages. The display is for a screen on the wall.
+      </p>
+    </div>
+    <a class="action" href="setup.html">Studio setup</a>
+  </section>
+
+  <p class="note">
+    Anything this page does not cover is in <code>README.md</code> beside the
+    code, which goes into a great deal more detail about why the arm refuses
+    things.
+  </p>
+</div>
+</body>
+</html>

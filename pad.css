@@ -466,3 +466,41 @@ a.action {
   .pigment { transition: none; }
   .pigment:hover { transform: none; }
 }
+
+/* The operator page: a numbered procedure somebody reads standing at the
+   machine, with a phone in one hand. Bigger than the visitor text, because
+   they are further from the screen and in a hurry. */
+.steps {
+  margin: 0;
+  padding-left: 1.4em;
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.steps li { margin-bottom: 10px; }
+.steps li:last-child { margin-bottom: 0; }
+.steps strong { color: var(--ink); }
+
+.warn {
+  border-left: 3px solid var(--accent);
+  padding-left: 14px;
+}
+
+code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.85em;
+  background: var(--paper-panel-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.panel pre {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  background: var(--paper-panel-2);
+  padding: 10px 12px;
+  border-radius: 4px;
+  margin: 0;
+  overflow-x: auto;
+}

@@ -35,6 +35,7 @@ the blending.
 | `pad.html` | The visitor's pad: grid, palette, print queue with per job and total paint times |
 | `portrait.html` | The other way in: New person, and the render to accept or bin. Links across to the pad and back |
 | `pad.css`, `queue.js` | The theme, and the print queue panel. Shared by both visitor pages, because there is one queue and both have to say so identically |
+| `operator.html` | For whoever is minding the arm: the two clicks, a portrait start to finish, and what to do when nothing is happening. Behind the same password |
 | `setup.html` | Bird's eye plan of the rig. Drag the sheets and pot block onto where they really are, set the sweep the arm may work in, add no-go boxes. Behind a password |
 | `display.html` | For a screen on the wall: the planned path, how much is done, and a live marker where the arm is |
 | `pointillism-pad.service` | systemd unit, so the Pi serves the pad from boot |

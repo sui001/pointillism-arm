@@ -83,7 +83,7 @@ Things that follow from this, all learned painfully:
 - **Every visitor page exists twice, and `pad.html` three times**: the root copies the
   Pi serves, plus `docs/` for the GitHub Pages demo, where `index.html` is another copy
   of `pad.html`. That is `pad.html`, `portrait.html`, `pad.css`, `queue.js`,
-  `setup.html` and `display.html`. Keep them in sync or the demo silently rots.
+  `setup.html`, `operator.html` and `display.html`. Keep them in sync or the demo silently rots.
 - **`pad_server` serves a whitelist, not a directory.** A new page, stylesheet or
   script is a 404 until it is in `PAGES`, which is the right way round given the
   Funnel URL, and is the first thing to check when a new file loads as nothing.
